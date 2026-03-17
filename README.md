@@ -1,76 +1,228 @@
-# jsClaw — 极简 LLM + Skill 集成框架
+# jsClaw
 
-一个轻量、可扩展的 Agent 框架，让 LLM 能够调用自定义技能（Skills）。
+> 一个用 JavaScript 写的极简 Agent 框架，让大语言模型能够调用自定义技能（Skill）完成实际任务。
+
+---
+
+## 创作背景
+
+市面上的 Agent 框架（LangChain、AutoGen 等）功能强大，但上手成本高、抽象层太厚，很多时候你只是想让 LLM **调用几个自己写的函数**，却要先啃完一本文档。
+
+jsClaw 从另一个方向出发——**能跑起来的最小实现**。整个框架只有 4 个核心文件，不到 200 行代码，把 LLM 调用、Skill 注册、Agentic 循环三件事拆干净，让你看一眼就懂、改一行就能用。
+
+名字来自 "JS" + "Claw"（爪子）——轻量、灵活、能抓住东西。
+
+---
+
+## 核心概念
+
+```
+用户输入
+   │
+   ▼
+┌──────────┐    注册的 Skills     ┌─────────────────┐
+│  Agent   │ ◄─────────────────── │  Skill Registry │
+│ (循环引擎) │                      │  registerSkill()│
+└──────────┘                      └─────────────────┘
+   │  ▲
+   │  │ tool_calls / tool results
+   ▼  │
+┌──────────┐
+│   LLM    │  支持千问 / OpenAI / DeepSeek / Moonshot / Ollama
+└──────────┘
+```
+
+- **LLM**：负责理解用户意图，决定调用哪个 Skill、传什么参数
+- **Skill**：你自己写的函数，干真正的活（查数据库、调 API、做计算……）
+- **Agent**：把两者串起来，循环驱动直到 LLM 给出最终回答
+
+---
 
 ## 项目结构
 
 ```
 jsClaw/
 ├── src/
-│   ├── index.js          # 交互式命令行入口
-│   ├── demo.js           # 本地 Skill 演示（无需 API Key）
-│   ├── llm.js            # LLM 客户端封装
-│   ├── agent.js          # Agent 核心（LLM + Skill 循环）
+│   ├── index.js          # 命令行交互入口（REPL）
+│   ├── demo.js           # 本地 Skill 演示，不需要 API Key
+│   ├── llm.js            # LLM 客户端封装，支持多 Provider
+│   ├── agent.js          # Agentic 循环核心
 │   └── skills/
-│       └── builtins.js   # 内置技能（计算 / 时间 / 搜索）
-├── .env                  # API Key 配置
+│       └── builtins.js   # 内置技能：数学计算 / 当前时间 / 网络搜索
+├── .env                  # 本地配置（不进 git）
+├── .env.example          # 配置模板
 └── package.json
 ```
 
+---
+
 ## 快速开始
 
-### 1. 安装依赖
+### 环境要求
+
+- Node.js >= 18
+
+### 1. 克隆仓库
+
+```bash
+git clone https://github.com/lijinly/jsClaw.git
+cd jsClaw
+```
+
+### 2. 安装依赖
 
 ```bash
 npm install
 ```
 
-### 2. 配置 API Key
+### 3. 配置 API Key
 
-编辑 `.env`，填入你的 LLM API Key：
-
-```env
-OPENAI_API_KEY=your_api_key_here
-OPENAI_BASE_URL=https://api.openai.com/v1   # 可换成 DeepSeek / Moonshot 等兼容接口
-MODEL_NAME=gpt-4o-mini
-```
-
-### 3. 运行
+复制配置模板并填入你的 API Key：
 
 ```bash
-# 启动交互式 Agent（需要 API Key）
+cp .env.example .env
+```
+
+编辑 `.env`：
+
+```env
+# 选择 Provider（默认千问）
+LLM_PROVIDER=qwen
+
+# 填入对应平台的 API Key
+OPENAI_API_KEY=your_api_key_here
+
+# 模型名称（可选，有默认值）
+MODEL_NAME=qwen-plus
+```
+
+### 4. 启动
+
+```bash
+# 启动交互式对话（需要 API Key）
 npm start
 
-# 本地 Skill 演示（不需要 API Key）
+# 本地 Skill 功能演示（不需要 API Key）
 npm run demo
 ```
 
+启动后示例：
+
+```
+🚀 jsClaw Agent 启动！（输入 exit 退出）
+
+你: 现在几点了？
+Agent: 当前时间是 2026/3/17 17:30:00
+
+你: 帮我算一下 (128 + 256) * 0.75
+Agent: (128 + 256) × 0.75 = 288
+
+你: exit
+```
+
+---
+
+## 支持的 LLM Provider
+
+在 `.env` 中修改 `LLM_PROVIDER` 即可一键切换，无需改代码。
+
+| Provider | LLM_PROVIDER | 默认模型 | 获取 API Key |
+|----------|-------------|---------|-------------|
+| 阿里云千问 | `qwen` | `qwen-plus` | [百炼平台](https://bailian.console.aliyun.com/) |
+| OpenAI | `openai` | `gpt-4o-mini` | [platform.openai.com](https://platform.openai.com/) |
+| DeepSeek | `deepseek` | `deepseek-chat` | [platform.deepseek.com](https://platform.deepseek.com/) |
+| Moonshot | `moonshot` | `moonshot-v1-8k` | [platform.moonshot.cn](https://platform.moonshot.cn/) |
+| Ollama（本地） | `ollama` | `llama3` | 无需 Key，本地运行 |
+
+**千问可选模型：**
+
+| 模型 | 特点 |
+|------|------|
+| `qwen-turbo` | 最快、最便宜，适合简单任务 |
+| `qwen-plus` | 均衡，默认推荐 |
+| `qwen-max` | 能力最强，适合复杂推理 |
+| `qwen-long` | 超长上下文（100万 token） |
+| `qwen2.5-72b-instruct` | 开源旗舰模型 |
+
+---
+
 ## 添加自定义 Skill
 
+在 `src/skills/` 下新建一个文件，调用 `registerSkill()` 注册即可。
+
 ```js
-import { registerSkill } from './src/skillRegistry.js';
+// src/skills/mySkills.js
+import { registerSkill } from '../skillRegistry.js';
 
 registerSkill({
-  name: 'my_skill',
-  description: 'LLM 看到这段描述后知道什么时候调用它',
+  name: 'get_weather',                          // 技能唯一名称
+  description: '查询指定城市的当前天气',          // LLM 靠这句话决定何时调用它
   parameters: {
     type: 'object',
     properties: {
-      input: { type: 'string', description: '输入内容' },
+      city: { type: 'string', description: '城市名，例如 "北京"' },
     },
-    required: ['input'],
+    required: ['city'],
   },
-  async execute({ input }) {
-    return `处理结果: ${input}`;
+  async execute({ city }) {
+    // 这里接入真实天气 API
+    return `${city} 今天晴，25°C，东南风 3 级`;
   },
 });
 ```
 
-## 兼容的 LLM 服务
+然后在 `src/index.js` 中导入：
 
-| 服务        | BASE_URL                                 | 模型示例         |
-|------------|------------------------------------------|-----------------|
-| OpenAI     | https://api.openai.com/v1                | gpt-4o-mini     |
-| DeepSeek   | https://api.deepseek.com/v1              | deepseek-chat   |
-| Moonshot   | https://api.moonshot.cn/v1               | moonshot-v1-8k  |
-| Ollama     | http://localhost:11434/v1                | llama3          |
+```js
+import './skills/mySkills.js';
+```
+
+启动后，当用户问"北京今天天气怎么样"，LLM 会自动判断并调用 `get_weather`。
+
+---
+
+## 以编程方式调用
+
+不想用命令行？直接引入 `runAgent` 集成到你自己的项目里：
+
+```js
+import 'dotenv/config';
+import { initLLM } from './src/llm.js';
+import { runAgent } from './src/agent.js';
+import './src/skills/builtins.js';
+
+initLLM(); // 读取 .env 配置
+
+const answer = await runAgent('帮我计算 3 的 10 次方');
+console.log(answer);
+```
+
+携带对话历史实现多轮对话：
+
+```js
+const history = [];
+
+// 第一轮
+const r1 = await runAgent('我叫小明', { history });
+history.push({ role: 'user', content: '我叫小明' });
+history.push({ role: 'assistant', content: r1 });
+
+// 第二轮（LLM 记得上文）
+const r2 = await runAgent('我叫什么名字？', { history });
+console.log(r2); // → 你叫小明
+```
+
+---
+
+## 开发计划
+
+- [ ] 流式输出支持（stream 模式）
+- [ ] Skill 异步并行执行
+- [ ] Web UI 界面
+- [ ] Skill 市场 / 插件化加载
+
+---
+
+## License
+
+MIT
