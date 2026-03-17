@@ -1,0 +1,15 @@
+{
+  "name": "jsclaw",
+  "version": "1.0.0",
+  "description": "极简 LLM + Skill 集成应用",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "demo": "node src/demo.js"
+  },
+  "dependencies": {
+    "openai": "^4.28.0",
+    "dotenv": "^16.4.1"
+  }
+}
