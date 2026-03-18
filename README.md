@@ -14,32 +14,15 @@ jsClaw 从另一个方向出发——**能跑起来的最小实现**。整个框
 
 ---
 
-## Agent 运行模式
+## Think-Act 模式
 
-jsClaw 提供两种 Agent 运行模式：
+jsClaw 采用 **Think-Act 模式**，分两个阶段处理：
 
-### 1️⃣ Auto 模式（自动）—— `runAgent()`
-
-LLM 自由决定是否调用 Skill，自动循环直到给出最终回答。适合大多数场景。
-
-```js
-const answer = await runAgent('帮我计算 3 的 10 次方');
-```
-
-**工作流程：**
-```
-用户问题 → LLM → [需要调用工具?]
-                    ├─ 是 → 执行Skill → 反馈结果 → 返回第一步
-                    └─ 否 → 返回最终答案
-```
-
-### 2️⃣ Think-Act 模式（思考-行动）—— `runAgentWithThink()`
-
-**第一步（Think）**：让 LLM 先思考问题的分析方案，详细规划需要调用哪些工具
-**第二步（Act）**：再根据思考结果执行相应的 Skill
+**第一步（Think）**：让 LLM 先思考问题的分析方案，详细规划需要调用哪些工具  
+**第二步（Act）**：根据思考结果执行相应的 Skill  
 **第三步**：综合思考过程和执行结果给出最终答案
 
-适合复杂问题，能获得更详细的中间过程和推理思路。
+这种设计提高了推理的透明性和准确性。
 
 ```js
 const { thinking, actions, result } = await runAgentWithThink(
@@ -77,10 +60,10 @@ npm run demo:think-act
 用户输入
    │
    ▼
-┌──────────────┐    注册的 Skills     ┌─────────────────┐
-│ Agent        │ ◄─────────────────── │  Skill Registry │
-│ (Auto/Think) │                      │  registerSkill()│
-└──────────────┘                      └─────────────────┘
+┌──────────────────┐    注册的 Skills     ┌─────────────────┐
+│ Agent            │ ◄─────────────────── │  Skill Registry │
+│ (Think-Act 模式) │                      │  registerSkill()│
+└──────────────────┘                      └─────────────────┘
    │  ▲
    │  │ tool_calls / tool results
    ▼  │
@@ -89,9 +72,9 @@ npm run demo:think-act
 └──────────┘
 ```
 
-- **LLM**：负责理解用户意图，决定调用哪个 Skill、传什么参数
+- **LLM**：负责思考问题方案，决定调用哪个 Skill、传什么参数
 - **Skill**：你自己写的函数，干真正的活（查数据库、调 API、做计算……）
-- **Agent**：Auto / Think-Act 两种模式，循环驱动直到 LLM 给出最终回答
+- **Agent**：Think-Act 两阶段模式，透明化推理过程
 
 ---
 
@@ -294,40 +277,7 @@ import './skills/mySkills.js';
 
 ## 以编程方式调用
 
-### Auto 模式（自动）
-
-不想用命令行？直接引入 `runAgent` 集成到你自己的项目里：
-
-```js
-import 'dotenv/config';
-import { initLLM } from './src/llm.js';
-import { runAgent } from './src/agent.js';
-import './src/skills/builtins.js';
-
-initLLM(); // 读取 .env 配置
-
-const answer = await runAgent('帮我计算 3 的 10 次方');
-console.log(answer);
-```
-
-携带对话历史实现多轮对话：
-
-```js
-const history = [];
-
-// 第一轮
-const r1 = await runAgent('我叫小明', { history });
-history.push({ role: 'user', content: '我叫小明' });
-history.push({ role: 'assistant', content: r1 });
-
-// 第二轮（LLM 记得上文）
-const r2 = await runAgent('我叫什么名字？', { history });
-console.log(r2); // → 你叫小明
-```
-
-### Think-Act 模式
-
-当你需要看到 LLM 的完整思考过程，使用 Think-Act 模式：
+直接引入 `runAgentWithThink` 集成到你自己的项目里：
 
 ```js
 import 'dotenv/config';
@@ -335,22 +285,43 @@ import { initLLM } from './src/llm.js';
 import { runAgentWithThink } from './src/agent.js';
 import './src/skills/builtins.js';
 
-initLLM();
+initLLM(); // 读取 .env 配置
 
 const { thinking, actions, result } = await runAgentWithThink(
-  '帮我统计今天访问量最多的页面，并计算增长百分比',
-  {
-    systemPrompt: '你是数据分析师',
-    verbose: true,  // 打印中间过程
-  }
+  '帮我计算 3 的 10 次方'
 );
-
-console.log('💭 思考过程：\n', thinking);
-console.log('\n⚙️  执行步骤：', actions);
-console.log('\n📊 最终结果：\n', result);
+console.log(result);
 ```
 
-**Think-Act 返回值说明：**
+**携带对话历史实现多轮对话：**
+
+```js
+const history = [];
+
+// 第一轮
+const r1 = await runAgentWithThink('我叫小明', { history });
+history.push({ role: 'user', content: '我叫小明' });
+history.push({ role: 'assistant', content: r1.result });
+
+// 第二轮（LLM 记得上文）
+const r2 = await runAgentWithThink('我叫什么名字？', { history });
+console.log(r2.result); // → 你叫小明
+```
+
+**获取完整的执行过程（调试用）：**
+
+```js
+const { thinking, actions, result } = await runAgentWithThink(
+  '分析今天的销售数据',
+  { verbose: true }  // 打印中间过程
+);
+
+console.log('💭 思考过程：', thinking);
+console.log('⚙️  执行步骤：', actions);  // 包含所有 Skill 调用和结果
+console.log('📊 最终结果：', result);
+```
+
+**返回值说明：**
 
 - `thinking`：LLM 的分析和规划过程
 - `actions`：数组，每项包含 `{ calls, results }`

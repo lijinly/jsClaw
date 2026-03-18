@@ -4,7 +4,7 @@
 import 'dotenv/config';
 import readline from 'readline';
 import { initLLM } from './llm.js';
-import { runAgent } from './agent.js';
+import { runAgentWithThink } from './agent.js';
 import './skills/builtins.js'; // 加载内置技能
 
 initLLM();
@@ -28,11 +28,11 @@ function prompt() {
     if (input.toLowerCase() === 'exit') { rl.close(); return; }
 
     try {
-      const answer = await runAgent(input, { systemPrompt: SYSTEM_PROMPT, history });
-      console.log(`\nAgent: ${answer}\n`);
+      const { result } = await runAgentWithThink(input, { systemPrompt: SYSTEM_PROMPT, history });
+      console.log(`\nAgent: ${result}\n`);
       // 保存对话历史
       history.push({ role: 'user', content: input });
-      history.push({ role: 'assistant', content: answer });
+      history.push({ role: 'assistant', content: result });
     } catch (err) {
       console.error('错误:', err.message);
     }
