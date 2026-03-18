@@ -34,9 +34,15 @@ let currentModel = null;
 
 /**
  * 初始化 LLM 客户端
+ * 优先级顺序：
+ *   1. 函数参数
+ *   2. 系统环境变量 (process.env)
+ *   3. .env 文件配置 (由 dotenv/config 注入)
+ *   4. 默认预设值
+ * 
  * @param {object} options
  * @param {string} [options.provider]  - 预设 provider 名称（qwen / openai / deepseek / moonshot / ollama）
- * @param {string} [options.apiKey]    - API Key（覆盖 .env）
+ * @param {string} [options.apiKey]    - API Key（覆盖 .env 和系统环境变量）
  * @param {string} [options.baseURL]   - 自定义 BaseURL（覆盖 provider 预设）
  * @param {string} [options.model]     - 模型名称（覆盖默认值）
  */
@@ -45,9 +51,25 @@ export function initLLM({ provider, apiKey, baseURL, model } = {}) {
   const providerName = provider || process.env.LLM_PROVIDER || 'openai';
   const preset = PROVIDERS[providerName] ?? PROVIDERS.openai;
 
+  // ✅ 优先读取系统环境变量，其次读取 .env 配置
   const resolvedBaseURL = baseURL || process.env.OPENAI_BASE_URL || preset.baseURL;
   const resolvedModel   = model   || process.env.MODEL_NAME      || preset.defaultModel;
-  const resolvedApiKey  = apiKey  || process.env.OPENAI_API_KEY  || 'sk-no-key';
+  const resolvedApiKey  = apiKey  || process.env.OPENAI_API_KEY;
+
+  // 验证 API Key
+  if (!resolvedApiKey || resolvedApiKey === 'sk-no-key') {
+    throw new Error(
+      '❌ API Key 未配置！\n\n' +
+      '请通过以下方式之一配置 OPENAI_API_KEY：\n\n' +
+      '1️⃣  系统环境变量（推荐）：\n' +
+      '   Windows: setx OPENAI_API_KEY "sk-xxxxx..."\n' +
+      '   Linux/Mac: export OPENAI_API_KEY="sk-xxxxx..."\n\n' +
+      '2️⃣  .env 文件：\n' +
+      '   OPENAI_API_KEY=sk-xxxxx...\n\n' +
+      '3️⃣  初始化时传入：\n' +
+      '   initLLM({ apiKey: "sk-xxxxx..." })\n'
+    );
+  }
 
   client = new OpenAI({
     apiKey:  resolvedApiKey,
@@ -56,7 +78,10 @@ export function initLLM({ provider, apiKey, baseURL, model } = {}) {
 
   currentModel = resolvedModel;
 
-  console.log(`[LLM] Provider: ${providerName} | BaseURL: ${resolvedBaseURL} | Model: ${resolvedModel}`);
+  // 显示配置信息（隐藏 API Key 的大部分字符）
+  const maskedKey = resolvedApiKey.substring(0, 8) + '...' + resolvedApiKey.substring(resolvedApiKey.length - 4);
+  console.log(`[LLM] Provider: ${providerName} | Model: ${resolvedModel} | API Key: ${maskedKey}`);
+  
   return { provider: providerName, baseURL: resolvedBaseURL, model: resolvedModel };
 }
 

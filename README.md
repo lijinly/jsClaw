@@ -121,72 +121,39 @@ npm install
 
 ### 3. 配置 API Key
 
-为了安全起见，**API Key 不存储在 .env 文件中**，需要设置为**系统环境变量**。
+jsClaw 优先从**系统环境变量**读取 API Key，其次从 `.env` 文件。这样做更安全，避免不小心提交敏感信息到 git。
 
-#### Windows 用户（推荐）
+#### ⚡ 快速配置（5 秒钟）
 
-**方法一：使用自动化脚本**
+**Windows 用户**：双击运行 `setup-api-key-session.bat`（当前会话有效）
 
-```bash
-# 用管理员身份运行（右键选择以管理员身份运行）
-setup-env.bat
-```
+**永久配置**：双击运行 `setup-api-key-permanent.bat`（需要管理员权限，重启后生效）
 
-然后按提示输入你的 API Key，脚本会自动配置系统环境变量。
+---
 
-**方法二：手动配置**
+#### 详细配置指南
 
-在 PowerShell 中执行：
-```powershell
-$env:OPENAI_API_KEY = "your_api_key_here"
-```
+完整的 API Key 配置指南请查看：**[API_KEY_SETUP_GUIDE.md](./API_KEY_SETUP_GUIDE.md)**
 
-或在 CMD 中执行：
-```cmd
-set OPENAI_API_KEY=your_api_key_here
-```
+包括以下方法：
 
-**方法三：永久配置**
+| 方法 | 时间 | 永久性 | 优先级 |
+|-----|------|-------|-------|
+| 临时脚本 | 5 秒 | ❌ | 高 |
+| 永久脚本 | 10 秒 | ✅ | 最高 |
+| 命令行设置 | 1 分钟 | ✅ | 最高 |
+| .env 文件 | 30 秒 | 项目级 | 中 |
+| 代码参数 | 1 分钟 | 代码级 | 最高 |
 
-1. 右键 "此电脑" → 属性
-2. 高级系统设置 → 环境变量
-3. 系统变量 → 新建
-4. 变量名：`OPENAI_API_KEY`，变量值：你的 API Key
-5. 重启 IDE 或命令行
+#### 验证配置
 
-#### macOS / Linux 用户
-
-**方法一：使用自动化脚本**
+运行诊断脚本检查 API Key 是否配置正确：
 
 ```bash
-bash setup-env.sh
+node diagnose-api.js
 ```
 
-然后按提示输入你的 API Key。
-
-**方法二：手动配置**
-
-编辑 `~/.bashrc` 或 `~/.zshrc`，添加：
-```bash
-export OPENAI_API_KEY="your_api_key_here"
-```
-
-然后运行：
-```bash
-source ~/.bashrc  # 或 source ~/.zshrc
-```
-
-#### 配置 .env（可选）
-
-如果想要本地测试（不提交到 git），可以在 `.env` 中临时设置：
-
-```bash
-cp .env.example .env
-# 编辑 .env，取消注释并填入你的 API Key
-OPENAI_API_KEY=your_api_key_here
-```
-
-**⚠️ 重要：不要将含真实 API Key 的 .env 提交到 git！**
+---
 
 ### 4. 启动
 
@@ -238,6 +205,86 @@ Agent: (128 + 256) × 0.75 = 288
 | `qwen-max` | 能力最强，适合复杂推理 |
 | `qwen-long` | 超长上下文（100万 token） |
 | `qwen2.5-72b-instruct` | 开源旗舰模型 |
+
+---
+
+## 内置 Skill 说明
+
+jsClaw 预装了以下实用技能，开箱即用：
+
+| 技能名 | 描述 | 参数 | 示例 |
+|-------|------|------|------|
+| `calculate` | 执行数学运算 | `expression: string` | `calculate({ expression: "3 * (4 + 2)" })` → `"18"` |
+| `get_current_time` | 获取当前日期时间 | 无 | `get_current_time()` → `"2026/3/18 12:30:45"` |
+| `web_search` | 多引擎实时网络搜索 | `query: string`, `engine?: string`, `limit?: number` | `web_search({ query: "最新AI技术", engine: "bing", limit: 5 })` |
+
+### 🔍 Web Search 详解
+
+**jsClaw 已集成 open-websearch！** 框架现在内置了功能完整的网络搜索能力。
+
+#### 支持的搜索引擎
+
+| 引擎 | 简介 | 无需 API Key |
+|-----|------|-----------|
+| **bing** | 微软 Bing 搜索（默认） | ✅ |
+| **duckduckgo** | 隐私友好型搜索 | ✅ |
+| **baidu** | 百度搜索（中文友好） | ✅ |
+| **csdn** | CSDN 技术博客搜索 | ✅ |
+
+#### 使用示例
+
+```js
+// 基础搜索
+const result = await web_search({ 
+  query: "Node.js 最佳实践" 
+});
+
+// 指定引擎
+const result = await web_search({ 
+  query: "React 18 新特性",
+  engine: "baidu",
+  limit: 10
+});
+
+// DuckDuckGo 搜索
+const result = await web_search({ 
+  query: "Python asyncio",
+  engine: "duckduckgo",
+  limit: 5
+});
+```
+
+#### 响应格式
+
+```json
+[搜索结果] 使用 bing 搜索 "Node.js" 的前 5 条结果：
+
+1. Node.js 官方网站
+   链接: https://nodejs.org/
+   描述: Node.js 是一个基于 Chrome V8 引擎的 JavaScript 运行环境...
+
+2. Node.js 中文官网
+   链接: https://nodejs.cn/
+   描述: Node.js 官方中文网站...
+```
+
+#### 优势
+
+✅ **无需 API Key** - 完全免费使用  
+✅ **多引擎支持** - 灵活切换搜索源  
+✅ **实时信息** - 获取最新的网络数据  
+✅ **中文支持** - 内置百度和 CSDN 搜索  
+✅ **错误处理** - 自动处理搜索失败和超时  
+
+#### 技术细节
+
+jsClaw 基于 **open-websearch** 实现网络搜索，该项目提供了：
+- 多搜索引擎的统一接口
+- 智能的结果解析和格式化
+- 代理支持（可配置 HTTP 代理）
+- 速率限制管理
+
+更多信息请查看 [open-websearch GitHub](https://github.com/Aas-ee/open-websearch)
 
 ---
 

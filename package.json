@@ -10,7 +10,8 @@
     "demo:think-act": "node src/demo-think-act.js"
   },
   "dependencies": {
-    "openai": "^4.28.0",
-    "dotenv": "^16.4.1"
+    "dotenv": "^16.4.1",
+    "open-websearch": "^1.2.7",
+    "openai": "^4.28.0"
   }
 }
