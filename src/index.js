@@ -14,9 +14,6 @@ const rl = readline.createInterface({
   output: process.stdout,
 });
 
-const SYSTEM_PROMPT = `你是一个智能助手，可以调用工具来回答用户问题。
-遇到数学计算、查时间、搜索信息等需求时，请优先使用对应工具。`;
-
 const history = [];
 
 console.log('\n🚀 jsClaw Agent 启动！（输入 exit 退出）\n');
@@ -28,7 +25,7 @@ function prompt() {
     if (input.toLowerCase() === 'exit') { rl.close(); return; }
 
     try {
-      const { result } = await runAgentWithThink(input, { systemPrompt: SYSTEM_PROMPT, history });
+      const { result } = await runAgentWithThink(input, { history });
       console.log(`\nAgent: ${result}\n`);
       // 保存对话历史
       history.push({ role: 'user', content: input });

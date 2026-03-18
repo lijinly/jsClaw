@@ -22,7 +22,7 @@ jsClaw 采用 **Think-Act 模式**，分两个阶段处理：
 **第二步（Act）**：根据思考结果执行相应的 Skill  
 **第三步**：综合思考过程和执行结果给出最终答案
 
-这种设计提高了推理的透明性和准确性。
+这种设计提高了推理的透明性和准确性。Agent 内置了默认的系统提示词，会自动指导 LLM 如何有效地使用 Skill。
 
 ```js
 const { thinking, actions, result } = await runAgentWithThink(
@@ -87,7 +87,8 @@ jsClaw/
 │   ├── demo.js               # 本地 Skill 演示，不需要 API Key
 │   ├── demo-think-act.js     # Think-Act 模式演示（需要 API Key）
 │   ├── llm.js                # LLM 客户端封装，支持多 Provider
-│   ├── agent.js              # Agent 核心（Auto 和 Think-Act 两种模式）
+│   ├── agent.js              # Agent 核心（Think-Act 模式）
+│   ├── skillRegistry.js      # Skill 注册和执行管理
 │   └── skills/
 │       └── builtins.js       # 内置技能：数学计算 / 当前时间 / 网络搜索
 ├── setup-env.bat             # Windows 环境变量设置脚本
@@ -293,6 +294,8 @@ const { thinking, actions, result } = await runAgentWithThink(
 console.log(result);
 ```
 
+Agent 会自动使用内置的系统提示词来指导 LLM 思考和调用 Skill。
+
 **携带对话历史实现多轮对话：**
 
 ```js
@@ -313,7 +316,7 @@ console.log(r2.result); // → 你叫小明
 ```js
 const { thinking, actions, result } = await runAgentWithThink(
   '分析今天的销售数据',
-  { verbose: true }  // 打印中间过程
+  { verbose: true }  // 打印 Think 和 Act 的中间过程
 );
 
 console.log('💭 思考过程：', thinking);
