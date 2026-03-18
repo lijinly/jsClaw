@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "start": "node src/index.js",
-    "demo": "node src/demo.js"
+    "demo": "node src/demo.js",
+    "demo:think-act": "node src/demo-think-act.js"
   },
   "dependencies": {
     "openai": "^4.28.0",
