@@ -107,6 +107,8 @@ jsClaw/
 │   ├── agent.js              # Agent 核心（Auto 和 Think-Act 两种模式）
 │   └── skills/
 │       └── builtins.js       # 内置技能：数学计算 / 当前时间 / 网络搜索
+├── setup-env.bat             # Windows 环境变量设置脚本
+├── setup-env.sh              # macOS/Linux 环境变量设置脚本
 ├── .env                      # 本地配置（不进 git）
 ├── .env.example              # 配置模板
 └── package.json
@@ -135,24 +137,72 @@ npm install
 
 ### 3. 配置 API Key
 
-复制配置模板并填入你的 API Key：
+为了安全起见，**API Key 不存储在 .env 文件中**，需要设置为**系统环境变量**。
+
+#### Windows 用户（推荐）
+
+**方法一：使用自动化脚本**
+
+```bash
+# 用管理员身份运行（右键选择以管理员身份运行）
+setup-env.bat
+```
+
+然后按提示输入你的 API Key，脚本会自动配置系统环境变量。
+
+**方法二：手动配置**
+
+在 PowerShell 中执行：
+```powershell
+$env:OPENAI_API_KEY = "your_api_key_here"
+```
+
+或在 CMD 中执行：
+```cmd
+set OPENAI_API_KEY=your_api_key_here
+```
+
+**方法三：永久配置**
+
+1. 右键 "此电脑" → 属性
+2. 高级系统设置 → 环境变量
+3. 系统变量 → 新建
+4. 变量名：`OPENAI_API_KEY`，变量值：你的 API Key
+5. 重启 IDE 或命令行
+
+#### macOS / Linux 用户
+
+**方法一：使用自动化脚本**
+
+```bash
+bash setup-env.sh
+```
+
+然后按提示输入你的 API Key。
+
+**方法二：手动配置**
+
+编辑 `~/.bashrc` 或 `~/.zshrc`，添加：
+```bash
+export OPENAI_API_KEY="your_api_key_here"
+```
+
+然后运行：
+```bash
+source ~/.bashrc  # 或 source ~/.zshrc
+```
+
+#### 配置 .env（可选）
+
+如果想要本地测试（不提交到 git），可以在 `.env` 中临时设置：
 
 ```bash
 cp .env.example .env
-```
-
-编辑 `.env`：
-
-```env
-# 选择 Provider（默认千问）
-LLM_PROVIDER=qwen
-
-# 填入对应平台的 API Key
+# 编辑 .env，取消注释并填入你的 API Key
 OPENAI_API_KEY=your_api_key_here
-
-# 模型名称（可选，有默认值）
-MODEL_NAME=qwen-plus
 ```
+
+**⚠️ 重要：不要将含真实 API Key 的 .env 提交到 git！**
 
 ### 4. 启动
 
