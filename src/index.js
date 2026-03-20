@@ -5,9 +5,11 @@ import 'dotenv/config';
 import readline from 'readline';
 import { initLLM } from './llm.js';
 import { runAgentWithThink } from './agent.js';
-import './skills/builtins.js'; // 加载内置技能
+import './skills/builtins.js';                   // 加载内置技能
+import { loadInstalledSkills } from './marketplace.js'; // 加载插件市场技能
 
 initLLM();
+await loadInstalledSkills();  // 自动加载所有已安装插件
 
 const rl = readline.createInterface({
   input: process.stdin,
