@@ -3,7 +3,84 @@
 // ─────────────────────────────────────────────
 import { registerSkill } from '../skillRegistry.js';
 
-// ① 数学计算
+// ── 基础工具（OpenClaw 风格）────────────────────
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+// 工作区根目录（从环境变量或当前目录推断）
+const WORKSPACE_ROOT = process.env.WORKSPACE_ROOT || path.join(__dirname, '..');
+
+// 安全路径解析，防止路径穿越攻击
+function resolveSafePath(userPath) {
+  const resolved = path.resolve(userPath);
+  const root = path.resolve(WORKSPACE_ROOT);
+  if (!resolved.startsWith(root)) {
+    throw new Error(`路径超出工作区范围：${userPath}`);
+  }
+  return resolved;
+}
+
+// ① 读取文件
+registerSkill({
+  name: 'read',
+  description: '读取指定文件的内容。支持读取项目中的代码、配置文件、文档等。',
+  parameters: {
+    type: 'object',
+    properties: {
+      path: { type: 'string', description: '文件路径，相对于工作区根目录，例如 "src/index.js" 或 "README.md"' },
+    },
+    required: ['path'],
+  },
+  async execute({ path: userPath }) {
+    try {
+      const safePath = resolveSafePath(userPath);
+      console.log(`[read] 读取文件：${safePath}`);
+      const content = fs.readFileSync(safePath, 'utf-8');
+      return content;
+    } catch (err) {
+      if (err.code === 'ENOENT') throw new Error(`文件不存在：${userPath}`);
+      if (err.code === 'EISDIR') throw new Error(`路径是目录而非文件：${userPath}`);
+      throw new Error(`读取失败：${err.message}`);
+    }
+  },
+});
+
+// ② 写入文件
+registerSkill({
+  name: 'write',
+  description: '创建或覆盖文件内容。支持写入代码、配置、文档等。如果父目录不存在会自动创建。',
+  parameters: {
+    type: 'object',
+    properties: {
+      path: { type: 'string', description: '文件路径，相对于工作区根目录，例如 "src/utils.js" 或 "config.json"' },
+      content: { type: 'string', description: '要写入的文件内容' },
+    },
+    required: ['path', 'content'],
+  },
+  async execute({ path: userPath, content }) {
+    try {
+      const safePath = resolveSafePath(userPath);
+      console.log(`[write] 写入文件：${safePath} (${content.length} 字符)`);
+
+      // 确保目录存在
+      const dir = path.dirname(safePath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+
+      fs.writeFileSync(safePath, content, 'utf-8');
+      return `✅ 已写入：${userPath}`;
+    } catch (err) {
+      throw new Error(`写入失败：${err.message}`);
+    }
+  },
+});
+
+// ── 内置工具 ─────────────────────────────
+
+// ③ 数学计算
 registerSkill({
   name: 'calculate',
   description: '执行基础数学运算（加减乘除）',
@@ -22,7 +99,7 @@ registerSkill({
   },
 });
 
-// ② 获取当前时间
+// ④ 获取当前时间
 registerSkill({
   name: 'get_current_time',
   description: '获取当前本地日期和时间',
@@ -32,7 +109,7 @@ registerSkill({
   },
 });
 
-// ③ 网络搜索 —— 使用 open-websearch
+// ⑤ 网络搜索 —— 使用 open-websearch
 // 多搜索引擎支持：Bing、DuckDuckGo、Baidu、CSDN、Brave、Exa、Juejin 等
 import { searchBing } from 'open-websearch/build/engines/bing/bing.js';
 import { searchDuckDuckGo } from 'open-websearch/build/engines/duckduckgo/index.js';
@@ -108,11 +185,6 @@ registerSkill({
 
 // ── ClaWHub Skill 懒加载工具 ─────────────────────
 
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PLUGINS_DIR = path.join(__dirname, '..', 'skills', 'plugins');
 const INDEX_FILE = path.join(PLUGINS_DIR, 'index.json');
 
@@ -129,7 +201,7 @@ function getSkillDir(slug) {
   return path.join(PLUGINS_DIR, slug);
 }
 
-// ④ 列出已安装的 Skill（懒加载入口）
+// ⑥ 列出已安装的 Skill（懒加载入口）
 registerSkill({
   name: 'list_skills',
   description: '列出所有已安装的 ClaWHub Skill（仅返回名称和描述）。当你不知道有哪些 Skill 可用时，先调用此工具。',
@@ -151,7 +223,7 @@ registerSkill({
   },
 });
 
-// ⑤ 读取指定 Skill 的 SKILL.md（按需加载）
+// ⑦ 读取指定 Skill 的 SKILL.md（按需加载）
 registerSkill({
   name: 'read_skill',
   description: '读取已安装 Skill 的完整说明文档（SKILL.md）。当你需要了解某个 Skill 的具体使用方法时，先调用 list_skills 查看有哪些 Skill，然后调用此工具读取具体的 SKILL.md。',
