@@ -89,11 +89,14 @@ jsClaw/
 │   ├── llm.js                # LLM 客户端封装，支持多 Provider
 │   ├── agent.js              # Agent 核心（Think-Act 模式）
 │   ├── skillRegistry.js      # Skill 注册和执行管理
-│   ├── marketplace.js        # Skill 市场 / 插件化加载
+│   ├── marketplace.js        # Skill 市场（ClaWHub 官方 API）
 │   └── skills/
 │       ├── builtins.js       # 内置技能：数学计算 / 当前时间 / 网络搜索
-│       └── plugins/          # 从市场安装的插件（自动加载）
-│           └── index.json    # 已安装插件清单
+│       └── plugins/          # 从 ClaWHub 安装的 Skill
+│           ├── index.json    # 已安装 Skill 清单
+│           └── <slug>/       # 每个 Skill 一个目录
+│               ├── SKILL.md  # Skill 说明（注入 system prompt）
+│               └── _meta.json
 ├── .env                      # 本地配置（不进 git）
 ├── .env.example              # 配置模板
 └── package.json
@@ -289,63 +292,61 @@ jsClaw 基于 **open-websearch** 实现网络搜索，该项目提供了：
 
 ---
 
-## Skill 市场（插件化加载）
+## Skill 市场（ClaWHub）
 
-jsClaw 内置了 **Skill 市场**，由腾讯云托管的 ClaWHub 国内镜像提供插件。
+jsClaw 内置 **Skill 市场**，直接接入 [ClaWHub](https://clawhub.ai) 官方注册中心，拥有 20,000+ 社区贡献的 Skill。
 
 ### 基础命令
 
 ```bash
-npm run skill:list                  # 浏览可用 Skill
-npm run skill:install -- <name>     # 安装 Skill
-npm run skill:remove  -- <name>     # 卸载 Skill
-npm run skill:installed             # 查看已安装
+npm run skill:list [query]        # 搜索 Skill（支持关键词）
+npm run skill:info -- <slug>      # 查看 Skill 详情
+npm run skill:install -- <slug>   # 安装 Skill
+npm run skill:remove  -- <slug>   # 卸载 Skill
+npm run skill:installed           # 查看已安装
 ```
 
-或者直接使用 node 命令：
+### 示例
 
 ```bash
-node src/marketplace.js list
-node src/marketplace.js install weather
-node src/marketplace.js remove  weather
-node src/marketplace.js installed
+# 搜索天气相关 Skill
+npm run skill:list weather
+
+# 查看详情
+npm run skill:info -- weather
+
+# 安装
+npm run skill:install -- weather
+
+# 重启 Agent 后即可使用
+npm start
 ```
 
 ### 工作原理
 
 ```
-1. install  →  从腾讯云镜像拉取 skill 的 .js 文件
-               → 保存到 src/skills/plugins/<name>.js
+1. npm run skill:install -- weather
+   → 从 ClaWHub API 获取 Skill 元信息
+   → 下载 zip 包（含 SKILL.md + _meta.json）
+   → 解压保存到 src/skills/plugins/weather/
 
-2. npm start →  自动扫描 src/skills/plugins/index.json
-               → 动态 import 每个插件文件
-               → 插件自行调用 registerSkill() 完成注册
+2. npm start
+   → 扫描 plugins/ 目录
+   → 读取所有 SKILL.md 内容
+   → 注入 system prompt，让 LLM 知道有哪些 Skill 可用
 ```
 
-### 插件格式（自行发布 Skill）
+### 什么是 SKILL.md？
 
-一个合法的插件就是**一个单文件**，格式如下：
+ClaWHub 的 Skill 不是可执行代码，而是 **Markdown 格式的说明文件**（SKILL.md），告诉 AI 如何使用某个工具。例如 `weather` Skill 的 SKILL.md 会说明：
 
-```js
-// 文件名即 Skill 名，例如：weather.js
-import { registerSkill } from '../../skillRegistry.js';
+> 使用 `curl wttr.in/城市` 可以查询天气，返回格式是……
 
-registerSkill({
-  name: 'weather',
-  description: '查询指定城市的天气预报',
-  parameters: {
-    type: 'object',
-    properties: {
-      city: { type: 'string', description: '城市名称，例如 "北京"' },
-    },
-    required: ['city'],
-  },
-  async execute({ city }) {
-    // 实现查询逻辑...
-    return `${city} 今天晴，气温 18°C`;
-  },
-});
-```
+Agent 读取后，就知道该怎么帮用户查天气了。
+
+### 发布自己的 Skill
+
+在 [clawhub.ai](https://clawhub.ai) 注册后即可发布 Skill，格式就是一个包含 `SKILL.md` 的 zip 包。详见 [ClaWHub 官方文档](https://openclaws.io/zh/docs/tools/clawhub/)。
 
 ---
 

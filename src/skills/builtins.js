@@ -57,10 +57,10 @@ registerSkill({
       if (!query || query.trim().length === 0) {
         throw new Error('搜索关键词不能为空');
       }
-      
+
       const searchLimit = Math.min(Math.max(limit || 5, 1), 20);
       const searchEngine = engine?.toLowerCase() || 'bing';
-      
+
       // 选择搜索引擎
       let searchFn;
       switch (searchEngine) {
@@ -77,15 +77,15 @@ registerSkill({
         default:
           searchFn = searchBing;
       }
-      
+
       // 执行搜索
       console.log(`[web_search] 使用 ${searchEngine} 引擎搜索: "${query}"`);
       const results = await searchFn(query.trim(), searchLimit);
-      
+
       if (!results || results.length === 0) {
         return `未找到关于 "${query}" 的搜索结果`;
       }
-      
+
       // 格式化结果
       const formattedResults = results
         .slice(0, searchLimit)
@@ -96,12 +96,89 @@ registerSkill({
           return `${idx + 1}. ${title}\n   链接: ${url}\n   描述: ${desc}`;
         })
         .join('\n\n');
-      
+
       return `[搜索结果] 使用 ${searchEngine} 搜索 "${query}" 的前 ${Math.min(results.length, searchLimit)} 条结果：\n\n${formattedResults}`;
     } catch (err) {
       // 提供更详细的错误信息
       const errorMsg = err instanceof Error ? err.message : String(err);
       return `搜索失败: ${errorMsg}。建议检查网络连接或尝试其他搜索引擎。`;
     }
+  },
+});
+
+// ── ClaWHub Skill 懒加载工具 ─────────────────────
+
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const PLUGINS_DIR = path.join(__dirname, '..', 'skills', 'plugins');
+const INDEX_FILE = path.join(PLUGINS_DIR, 'index.json');
+
+function loadIndex() {
+  if (!fs.existsSync(INDEX_FILE)) return {};
+  try {
+    return JSON.parse(fs.readFileSync(INDEX_FILE, 'utf-8'));
+  } catch {
+    return {};
+  }
+}
+
+function getSkillDir(slug) {
+  return path.join(PLUGINS_DIR, slug);
+}
+
+// ④ 列出已安装的 Skill（懒加载入口）
+registerSkill({
+  name: 'list_skills',
+  description: '列出所有已安装的 ClaWHub Skill（仅返回名称和描述）。当你不知道有哪些 Skill 可用时，先调用此工具。',
+  parameters: { type: 'object', properties: {} },
+  async execute() {
+    const idx = loadIndex();
+    const entries = Object.entries(idx);
+
+    if (entries.length === 0) {
+      return '当前没有安装任何 ClaWHub Skill。可以使用 `npm run skill:list` 搜索并安装。';
+    }
+
+    const lines = [`已安装 ${entries.length} 个 ClaWHub Skill：\n`];
+    for (const [slug, meta] of entries) {
+      lines.push(`  • ${slug} - (版本: ${meta.version || '?'})`);
+    }
+
+    return lines.join('\n') + '\n\n提示：使用 `read_skill` 工具可以读取指定 Skill 的完整说明（SKILL.md）。';
+  },
+});
+
+// ⑤ 读取指定 Skill 的 SKILL.md（按需加载）
+registerSkill({
+  name: 'read_skill',
+  description: '读取已安装 Skill 的完整说明文档（SKILL.md）。当你需要了解某个 Skill 的具体使用方法时，先调用 list_skills 查看有哪些 Skill，然后调用此工具读取具体的 SKILL.md。',
+  parameters: {
+    type: 'object',
+    properties: {
+      slug: { type: 'string', description: 'Skill 的名称（slug），必须先通过 list_skills 获取' },
+    },
+    required: ['slug'],
+  },
+  async execute({ slug }) {
+    if (!slug) throw new Error('slug 参数不能为空');
+
+    const idx = loadIndex();
+    if (!idx[slug]) {
+      const available = Object.keys(idx).join(', ') || '(无)';
+      return `错误：未找到 Skill "${slug}"\n可用的 Skill：${available}\n请先用 list_skills 查看已安装的 Skill。`;
+    }
+
+    const skillDir = getSkillDir(slug);
+    const skillFile = path.join(skillDir, 'SKILL.md');
+
+    if (!fs.existsSync(skillFile)) {
+      return `错误：Skill "${slug}" 的 SKILL.md 文件缺失。\n路径：${skillFile}\n建议重新安装该 Skill。`;
+    }
+
+    const content = fs.readFileSync(skillFile, 'utf-8');
+    return `## Skill: ${slug}\n\n${content}`;
   },
 });

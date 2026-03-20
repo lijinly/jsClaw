@@ -225,31 +225,10 @@ function cmdInstalled() {
   console.log('');
 }
 
-// ── 读取 SKILL.md（供 index.js 注入 system prompt）──
+// ── 导出：获取 Skill 目录（供懒加载工具使用）──────────
 
-/**
- * 读取所有已安装 Skill 的 SKILL.md 内容
- * 返回字符串数组，每个元素是一个 Skill 的说明
- */
-export function loadSkillDescriptions() {
-  const idx = loadIndex();
-  const descriptions = [];
-
-  for (const [slug] of Object.entries(idx)) {
-    const skillDir = path.join(SKILLS_DIR, slug);
-    const skillFile = path.join(skillDir, 'SKILL.md');
-
-    if (!fs.existsSync(skillFile)) {
-      console.warn(`[Marketplace] ⚠️  SKILL.md 缺失，跳过：${slug}`);
-      continue;
-    }
-
-    const content = fs.readFileSync(skillFile, 'utf-8');
-    descriptions.push(`\n## Skill: ${slug}\n${content}`);
-  }
-
-  return descriptions;
-}
+/** 获取插件目录路径（供 list_skills/read_skill 工具使用） */
+export { SKILLS_DIR };
 
 // ── CLI 入口 ──────────────────────────────────────────
 

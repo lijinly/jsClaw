@@ -5,16 +5,9 @@ import 'dotenv/config';
 import readline from 'readline';
 import { initLLM } from './llm.js';
 import { runAgentWithThink } from './agent.js';
-import './skills/builtins.js';                       // 加载内置技能
-import { loadSkillDescriptions } from './marketplace.js'; // 加载 ClaWHub Skill 说明
+import './skills/builtins.js';  // 加载内置技能（含 list_skills、read_skill）
 
 initLLM();
-
-// 加载已安装 ClaWHub Skill 的 SKILL.md，拼入 system prompt
-const skillDescriptions = loadSkillDescriptions();
-const EXTENDED_SYSTEM_PROMPT = skillDescriptions.length > 0
-  ? `\n\n# 🧩 已安装的 Skills (ClaWHub)\n${skillDescriptions.join('\n\n---\n')}\n`
-  : '';
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -32,7 +25,7 @@ function prompt() {
     if (input.toLowerCase() === 'exit') { rl.close(); return; }
 
   try {
-    const { result } = await runAgentWithThink(input, { history, systemPrompt: EXTENDED_SYSTEM_PROMPT });
+    const { result } = await runAgentWithThink(input, { history });
     console.log(`\nAgent: ${result}\n`);
       // 保存对话历史
       history.push({ role: 'user', content: input });
