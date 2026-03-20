@@ -9,11 +9,13 @@
     "demo": "node src/demo.js",
     "demo:think-act": "node src/demo-think-act.js",
     "skill:list": "node src/marketplace.js list",
+    "skill:info": "node src/marketplace.js info",
     "skill:install": "node src/marketplace.js install",
     "skill:remove": "node src/marketplace.js remove",
     "skill:installed": "node src/marketplace.js installed"
   },
   "dependencies": {
+    "adm-zip": "^0.5.16",
     "dotenv": "^16.4.1",
     "open-websearch": "^1.2.7",
     "openai": "^4.28.0"
