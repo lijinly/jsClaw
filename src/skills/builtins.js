@@ -78,38 +78,7 @@ registerSkill({
   },
 });
 
-// ── 内置工具 ─────────────────────────────
-
-// ③ 数学计算
-registerSkill({
-  name: 'calculate',
-  description: '执行基础数学运算（加减乘除）',
-  parameters: {
-    type: 'object',
-    properties: {
-      expression: { type: 'string', description: '数学表达式，例如 "3 * (4 + 2)"' },
-    },
-    required: ['expression'],
-  },
-  async execute({ expression }) {
-    // 安全地只允许数字和运算符
-    if (!/^[\d\s+\-*/().]+$/.test(expression)) throw new Error('非法表达式');
-    // eslint-disable-next-line no-eval
-    return String(eval(expression));
-  },
-});
-
-// ④ 获取当前时间
-registerSkill({
-  name: 'get_current_time',
-  description: '获取当前本地日期和时间',
-  parameters: { type: 'object', properties: {} },
-  async execute() {
-    return new Date().toLocaleString('zh-CN', { hour12: false });
-  },
-});
-
-// ⑤ 网络搜索 —— 使用 open-websearch
+// ③ 网络搜索 —— 使用 open-websearch
 // 多搜索引擎支持：Bing、DuckDuckGo、Baidu、CSDN、Brave、Exa、Juejin 等
 import { searchBing } from 'open-websearch/build/engines/bing/bing.js';
 import { searchDuckDuckGo } from 'open-websearch/build/engines/duckduckgo/index.js';
@@ -183,7 +152,7 @@ registerSkill({
   },
 });
 
-// ⑥ 执行 shell 命令
+// ④ 执行 shell 命令
 import { execSync } from 'child_process';
 
 registerSkill({
@@ -224,7 +193,7 @@ registerSkill({
   },
 });
 
-// ⑦ 抓取网页内容（HTML → Markdown）
+// ⑤ 抓取网页内容（HTML → Markdown）
 import https from 'https';
 
 // 企业网络/代理环境下可能存在 SSL 证书验证问题，提供可配置的绕过选项
@@ -353,7 +322,7 @@ function getSkillDir(slug) {
   return path.join(PLUGINS_DIR, slug);
 }
 
-// ⑧ 列出已安装的 Skill（懒加载入口）
+// ⑥ 列出已安装的 Skill（懒加载入口）
 registerSkill({
   name: 'list_skills',
   description: '列出所有已安装的 ClaWHub Skill（仅返回名称和描述）。当你不知道有哪些 Skill 可用时，先调用此工具。',
@@ -375,7 +344,7 @@ registerSkill({
   },
 });
 
-// ⑨ 读取指定 Skill 的 SKILL.md（按需加载）
+// ⑦ 读取指定 Skill 的 SKILL.md（按需加载）
 registerSkill({
   name: 'read_skill',
   description: '读取已安装 Skill 的完整说明文档（SKILL.md）。当你需要了解某个 Skill 的具体使用方法时，先调用 list_skills 查看有哪些 Skill，然后调用此工具读取具体的 SKILL.md。',
