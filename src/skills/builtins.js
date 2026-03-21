@@ -544,58 +544,70 @@ registerSkill({
   },
 });
 
-// ⑩ 浏览器自动化（使用 Playwright 连接系统浏览器）
-import { chromium } from 'playwright';
+// ⑩ 浏览器自动化（使用 Puppeteer）
+import puppeteer from 'puppeteer';
 
 /**
- * 全局浏览器实例（复用连接，避免每次都启动新浏览器）
- * key: browserType (chromium/firefox/webkit)
+ * 全局浏览器实例（复用连接）
  */
-let browserCache = null;
+let browserInstance = null;
+let pageInstance = null;
 
-async function getBrowser(browserType = 'chromium') {
-  if (browserCache && browserCache.isConnected()) {
-    return browserCache;
+async function getBrowser() {
+  // 如果已连接，直接返回
+  if (browserInstance && browserInstance.isConnected()) {
+    return { browser: browserInstance, page: pageInstance };
   }
 
-  // 连接到系统已安装的 Chrome/Edge（Windows）
-  // Chrome: --remote-debugging-port=9222
-  // Edge: --remote-debugging-port=9223
-  let cdpEndpoint;
-  if (browserType === 'chromium') {
-    // 尝试连接 Chrome (9222) 或 Edge (9223)
-    try {
-      browserCache = await chromium.connectOverCDP('http://localhost:9222');
-      console.log(`[browser] 已连接到 Chrome (CDP: 9222)`);
-      return browserCache;
-    } catch {
-      try {
-        browserCache = await chromium.connectOverCDP('http://localhost:9223');
-        console.log(`[browser] 已连接到 Edge (CDP: 9223)`);
-        return browserCache;
-      } catch {
-        throw new Error('无法连接到浏览器。请确保 Chrome/Edge 以 --remote-debugging-port=9222 启动。\n启动命令示例：\n  Chrome: chrome.exe --remote-debugging-port=9222\n  Edge: msedge.exe --remote-debugging-port=9222');
-      }
+  // 尝试使用系统 Chrome/Edge（按优先级）
+  const possiblePaths = [
+    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+    'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
+  ];
+
+  let executablePath = null;
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) {
+      executablePath = p;
+      console.log(`[browser] 使用系统浏览器: ${p}`);
+      break;
     }
   }
 
-  throw new Error(`不支持的浏览器类型: ${browserType}`);
+  // 启动浏览器（headless 模式）
+  const launchOptions = {
+    headless: true,
+    executablePath,
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+  };
+
+  // 如果找不到系统浏览器，提示用户
+  if (!executablePath) {
+    console.log('[browser] 未找到系统浏览器，请安装 Chrome 或 Edge');
+  }
+
+  browserInstance = await puppeteer.launch(launchOptions);
+  pageInstance = await browserInstance.newPage();
+
+  return { browser: browserInstance, page: pageInstance };
 }
 
 registerSkill({
   name: 'browser',
-  description: '浏览器自动化工具。支持打开页面、截图、点击、填表单、提取文本等操作。需要预先启动浏览器并开启远程调试端口。',
+  description: '浏览器自动化工具（基于 Puppeteer）。支持打开页面、截图、点击、填表单、提取文本等操作。自动使用系统 Chrome/Edge，无需手动启动。',
   parameters: {
     type: 'object',
     properties: {
       action: {
         type: 'string',
-        description: '操作类型：open/page/screenshot/click/fill/type/select/evaluate/close',
-        enum: ['open', 'page', 'screenshot', 'click', 'fill', 'type', 'select', 'evaluate', 'close'],
+        description: '操作类型：open/page/screenshot/click/type/select/evaluate/close',
+        enum: ['open', 'page', 'screenshot', 'click', 'type', 'select', 'evaluate', 'close'],
       },
       url: { type: 'string', description: '要打开的 URL（open action 使用）' },
-      selector: { type: 'string', description: 'CSS 选择器（click/fill/type/select action 使用）' },
-      text: { type: 'string', description: '要输入的文本（fill/type action 使用）或要选择的选项文本（select action 使用）' },
+      selector: { type: 'string', description: 'CSS 选择器（click/type/select action 使用）' },
+      text: { type: 'string', description: '要输入的文本（type action 使用）或要选择的选项值（select action 使用）' },
       script: { type: 'string', description: '要执行的 JavaScript 代码（evaluate action 使用）' },
       path: { type: 'string', description: '截图保存路径（相对于工作区根目录，screenshot action 使用）' },
     },
@@ -603,10 +615,7 @@ registerSkill({
   },
   async execute({ action, url, selector, text, script, path: screenshotPath }) {
     try {
-      const browser = await getBrowser();
-      const context = browser.contexts()[0] || await browser.newContext();
-      const pages = context.pages();
-      const page = pages[0] || await context.newPage();
+      const { browser, page } = await getBrowser();
 
       switch (action) {
         case 'open': {
@@ -633,12 +642,6 @@ registerSkill({
           return `✅ 已点击: ${selector}`;
         }
 
-        case 'fill': {
-          console.log(`[browser] 填写: ${selector} = ${text}`);
-          await page.fill(selector, text);
-          return `✅ 已填写: ${selector}`;
-        }
-
         case 'type': {
           console.log(`[browser] 输入: ${selector} = ${text}`);
           await page.type(selector, text);
@@ -647,7 +650,7 @@ registerSkill({
 
         case 'select': {
           console.log(`[browser] 选择: ${selector} = ${text}`);
-          await page.selectOption(selector, text);
+          await page.select(selector, text);
           return `✅ 已选择: ${selector}`;
         }
 
@@ -658,19 +661,24 @@ registerSkill({
         }
 
         case 'close': {
-          console.log(`[browser] 关闭页面`);
-          await page.close();
-          return '✅ 页面已关闭';
+          console.log(`[browser] 关闭浏览器`);
+          if (browserInstance) {
+            await browserInstance.close().catch(() => {});
+            browserInstance = null;
+            pageInstance = null;
+          }
+          return '✅ 浏览器已关闭';
         }
 
         default:
           return `未知操作: ${action}`;
       }
     } catch (err) {
-      // 关闭浏览器连接（出错时）
-      if (browserCache?.isConnected()) {
-        await browserCache.close().catch(() => {});
-        browserCache = null;
+      // 关闭浏览器（出错时）
+      if (browserInstance?.isConnected()) {
+        await browserInstance.close().catch(() => {});
+        browserInstance = null;
+        pageInstance = null;
       }
       return `浏览器操作失败: ${err.message}`;
     }
