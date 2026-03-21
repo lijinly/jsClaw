@@ -39,9 +39,10 @@ jsClaw 从另一个方向出发——**能跑起来的最小实现**。整个框
 
 ### 快速体验
 
+直接使用交互式命令行体验 Sheepy（需要 API Key）：
+
 ```bash
-# 运行 Sheepy 演示（需要 API Key）
-npm run demo:sheepy
+npm start
 ```
 
 ### 编程方式使用
@@ -104,10 +105,10 @@ console.log(result);    // 最终答案
                             └─ 否 → 输出最终答案
 ```
 
-**快速体验 Think-Act 演示**（需要 API Key）：
+**快速体验**（需要 API Key）：
 
 ```bash
-npm run demo:think-act
+npm start
 ```
 
 **Sheepy vs Worker Agent 的选择：**
@@ -155,8 +156,6 @@ npm run demo:think-act
 jsClaw/
 ├── src/
 │   ├── index.js              # 命令行交互入口（REPL）
-│   ├── demo-think-act.js     # Think-Act 模式演示（需要 API Key）
-│   ├── demo-sheepy.js        # Sheepy 任务编排演示（需要 API Key）
 │   ├── llm.js                # LLM 客户端封装，支持多 Provider
 │   ├── agent.js              # Worker Agent 核心（Think-Act 模式）
 │   ├── sheepy.js             # Sheepy 任务编排 Agent
@@ -238,12 +237,6 @@ node diagnose-api.js
 ```bash
 # 启动交互式对话（需要 API Key）
 npm start
-
-# Worker Agent - Think-Act 模式演示（需要 API Key）
-npm run demo:think-act
-
-# Sheepy - 任务编排演示（推荐，需要 API Key）
-npm run demo:sheepy
 ```
 
 启动后示例：
