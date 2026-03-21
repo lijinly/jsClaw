@@ -584,18 +584,100 @@ async function getBrowser(browserType = 'chromium') {
 
 registerSkill({
   name: 'browser',
-  description: '浏览器自动化工具。支持打开页面、截图、点击、填表单、提取文本等操作。需要预先启动浏览器并开启远程调试端口。',\n  parameters: {
-n    type: 'object',
+  description: '浏览器自动化工具。支持打开页面、截图、点击、填表单、提取文本等操作。需要预先启动浏览器并开启远程调试端口。',
+  parameters: {
+    type: 'object',
     properties: {
-      action: { 
-        type: 'string', 
-        description: '操作类型：open/page/screenshot/click/fill/type/select/evaluate/close',\n        enum: ['open', 'page', 'screenshot', 'click', 'fill', 'type', 'select', 'evaluate', 'close']\n      },
-n      url: { type: 'string', description: '要打开的 URL（open action 使用）' },
-n      selector: { type: 'string', description: 'CSS 选择器（click/fill/type/select action 使用）' },
-n      text: { type: 'string', description: '要输入的文本（fill/type action 使用）或要选择的选项文本（select action 使用）' },
-n      script: { type: 'string', description: '要执行的 JavaScript 代码（evaluate action 使用）' },
-n      path: { type: 'string', description: '截图保存路径（相对于工作区根目录，screenshot action 使用）' },
-n    },\n    required: ['action'],\n  },\n  async execute({ action, url, selector, text, script, path: screenshotPath }) {\n    try {\n      const browser = await getBrowser();\n      const context = browser.contexts()[0] || await browser.newContext();\n      const pages = context.pages();\n      const page = pages[0] || await context.newPage();\n\n      switch (action) {\n        case 'open': {\n          console.log(`[browser] 打开页面: ${url}`);\n          await page.goto(url);\n          return `✅ 已打开: ${url}`;\n        }\n\n        case 'page': {\n          const title = await page.title();\n          const currentUrl = page.url();\n          return `当前页面：\n  标题：${title}\n  URL：${currentUrl}`;\n        }\n\n        case 'screenshot': {\n          const savePath = screenshotPath ? resolveSafePath(screenshotPath) : resolveSafePath('screenshot.png');\n          await page.screenshot({ path: savePath, fullPage: false });\n          return `✅ 截图已保存: ${savePath}`;\n        }\n\n        case 'click': {\n          console.log(`[browser] 点击: ${selector}`);\n          await page.click(selector);\n          return `✅ 已点击: ${selector}`;\n        }\n\n        case 'fill': {\n          console.log(`[browser] 填写: ${selector} = ${text}`);\n          await page.fill(selector, text);\n          return `✅ 已填写: ${selector}`;\n        }\n\n        case 'type': {\n          console.log(`[browser] 输入: ${selector} = ${text}`);\n          await page.type(selector, text);\n          return `✅ 已输入: ${selector}`;\n        }\n\n        case 'select': {\n          console.log(`[browser] 选择: ${selector} = ${text}`);\n          await page.selectOption(selector, text);\n          return `✅ 已选择: ${selector}`;\n        }\n\n        case 'evaluate': {\n          console.log(`[browser] 执行脚本`);\n          const result = await page.evaluate(script);\n          return typeof result === 'object' ? JSON.stringify(result, null, 2) : String(result);\n        }\n\n        case 'close': {\n          console.log(`[browser] 关闭页面`);\n          await page.close();\n          return '✅ 页面已关闭';\n        }\n\n        default:\n          return `未知操作: ${action}`;\n      }\n    } catch (err) {\n      // 关闭浏览器连接（出错时）\n      if (browserCache?.isConnected()) {\n        await browserCache.close().catch(() => {});\n        browserCache = null;\n      }\n      return `浏览器操作失败: ${err.message}`;\n    }\n  },\n});\n\n// ── ClaWHub Skill 懒加载工具 ─────────────────────
+      action: {
+        type: 'string',
+        description: '操作类型：open/page/screenshot/click/fill/type/select/evaluate/close',
+        enum: ['open', 'page', 'screenshot', 'click', 'fill', 'type', 'select', 'evaluate', 'close'],
+      },
+      url: { type: 'string', description: '要打开的 URL（open action 使用）' },
+      selector: { type: 'string', description: 'CSS 选择器（click/fill/type/select action 使用）' },
+      text: { type: 'string', description: '要输入的文本（fill/type action 使用）或要选择的选项文本（select action 使用）' },
+      script: { type: 'string', description: '要执行的 JavaScript 代码（evaluate action 使用）' },
+      path: { type: 'string', description: '截图保存路径（相对于工作区根目录，screenshot action 使用）' },
+    },
+    required: ['action'],
+  },
+  async execute({ action, url, selector, text, script, path: screenshotPath }) {
+    try {
+      const browser = await getBrowser();
+      const context = browser.contexts()[0] || await browser.newContext();
+      const pages = context.pages();
+      const page = pages[0] || await context.newPage();
+
+      switch (action) {
+        case 'open': {
+          console.log(`[browser] 打开页面: ${url}`);
+          await page.goto(url);
+          return `✅ 已打开: ${url}`;
+        }
+
+        case 'page': {
+          const title = await page.title();
+          const currentUrl = page.url();
+          return `当前页面：\n  标题：${title}\n  URL：${currentUrl}`;
+        }
+
+        case 'screenshot': {
+          const savePath = screenshotPath ? resolveSafePath(screenshotPath) : resolveSafePath('screenshot.png');
+          await page.screenshot({ path: savePath, fullPage: false });
+          return `✅ 截图已保存: ${savePath}`;
+        }
+
+        case 'click': {
+          console.log(`[browser] 点击: ${selector}`);
+          await page.click(selector);
+          return `✅ 已点击: ${selector}`;
+        }
+
+        case 'fill': {
+          console.log(`[browser] 填写: ${selector} = ${text}`);
+          await page.fill(selector, text);
+          return `✅ 已填写: ${selector}`;
+        }
+
+        case 'type': {
+          console.log(`[browser] 输入: ${selector} = ${text}`);
+          await page.type(selector, text);
+          return `✅ 已输入: ${selector}`;
+        }
+
+        case 'select': {
+          console.log(`[browser] 选择: ${selector} = ${text}`);
+          await page.selectOption(selector, text);
+          return `✅ 已选择: ${selector}`;
+        }
+
+        case 'evaluate': {
+          console.log(`[browser] 执行脚本`);
+          const result = await page.evaluate(script);
+          return typeof result === 'object' ? JSON.stringify(result, null, 2) : String(result);
+        }
+
+        case 'close': {
+          console.log(`[browser] 关闭页面`);
+          await page.close();
+          return '✅ 页面已关闭';
+        }
+
+        default:
+          return `未知操作: ${action}`;
+      }
+    } catch (err) {
+      // 关闭浏览器连接（出错时）
+      if (browserCache?.isConnected()) {
+        await browserCache.close().catch(() => {});
+        browserCache = null;
+      }
+      return `浏览器操作失败: ${err.message}`;
+    }
+  },
+});
+
+// ── ClaWHub Skill 懒加载工具 ─────────────────────
 
 const PLUGINS_DIR = path.join(__dirname, '..', 'skills', 'plugins');
 const INDEX_FILE = path.join(PLUGINS_DIR, 'index.json');
