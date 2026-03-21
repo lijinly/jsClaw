@@ -75,63 +75,44 @@ export class TeamLab {
 
   /**
    * 在 Team 外处理任务
+   * 直接使用 Agent 完成，不再使用 Manager
    */
   async handleTaskOutsideTeam(task) {
-    // 这里可以创建一个临时的 Leader
-    // 复用 Leader 的决策逻辑
+    const { Agent } = await import('./agent.js');
     const allTeams = this.registry.getAllTeams();
 
-    // 简化版决策（实际应使用 TeamLeader）
-    const response = await this.makeDecision(task, allTeams);
+    // 创建 Agent 实例
+    const agent = new Agent({
+      name: 'Team 外助手',
+      role: '智能助手',
+      verbose: false,
+    });
 
-    if (response.action === 'suggest_team') {
-      console.log(`\n💡 ${response.message}`);
-      console.log(`   ${response.taskAnalysis.description}\n`);
-
-      return {
-        suggestedTeam: response.team,
-        requiresTeamEnter: true,
-      };
-    } else {
-      console.log(`\n✅ ${response.message}`);
-      return {
-        result: response.result,
-        requiresTeamEnter: false,
-      };
-    }
-  }
-
-  /**
-   * 决策是否需要进入 Team
-   */
-  async makeDecision(task, allTeams) {
-    // 这里简化了决策逻辑
-    // 实际应使用 TeamLeader.handleTaskOutsideTeam()
-
-    // 判断是否需要复杂技能
+    // 简化的决策逻辑：判断是否需要进入 Team
     const needsComplexSkills = ['web_search', 'exec', 'browser'].some(skill =>
       task.toLowerCase().includes(skill)
     );
 
     if (needsComplexSkills && allTeams.length > 0) {
-      // 建议进入第一个 Team（简化逻辑）
+      // 建议进入 Team
       const suggestedTeam = allTeams[0];
       return {
-        action: 'suggest_team',
-        message: `建议进入"${suggestedTeam.name}"来完成这个任务`,
-        team: suggestedTeam,
+        suggestedTeam: suggestedTeam,
+        requiresTeamEnter: true,
+        message: `💡 建议进入"${suggestedTeam.name}"来完成这个任务`,
         taskAnalysis: {
           requiredSkills: ['complex-skills'],
           complexity: 7,
-          description: '需要复杂技能集',
+          description: '需要复杂技能集，建议使用 Team 协作',
         },
       };
     } else {
-      // 自己完成
+      // 直接使用 Agent 完成
+      const { result } = await agent.run(task);
       return {
-        action: 'completed',
-        message: 'Leader 已完成',
-        result: `(模拟完成): ${task}`,
+        result,
+        requiresTeamEnter: false,
+        message: '✅ Agent 已完成任务',
       };
     }
   }

@@ -6,41 +6,38 @@
 
 ## 🎯 核心特性
 
-jsClaw 采用**三层协作架构**，从简单到复杂提供不同的能力：
+jsClaw 采用**双层协作架构**，从简单到复杂提供不同的能力：
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    用户请求                              │
 └─────────────────┬───────────────────────────────────────┘
                   │
-      ┌───────────┼───────────┐
-      │           │           │
-      ▼           ▼           ▼
-  ┌────────┐  ┌────────┐  ┌──────────┐
-  │ Manager│  │  Team  │  │  Worker  │
-  │  Agent │  │   Lab  │  │  Agent   │
-  └────────┘  └────────┘  └──────────┘
-  (智能编排)  (协作团队)  (Think-Act)
+      ┌───────────┴───────────┐
+      │                       │
+      ▼                       ▼
+  ┌────────┐          ┌──────────┐
+  │  Team  │          │  Worker  │
+  │   Lab  │          │  Agent   │
+  └────────┘          └──────────┘
+  (协作团队)          (Think-Act)
 ```
 
-### 🧠 三层架构
+### 🧠 双层架构
 
-1. **Manager（智能编排）** - 任务编排 Agent
-   - 智能判断任务类型（简单 vs 复杂）
-   - 自动分发：简单任务直接回答，复杂任务交给 Worker Agent
-   - 提供执行指引，减少 token 消耗
-   - 评估执行结果质量
-
-2. **Team（协作团队）** - 持久化协作系统
+1. **Team（协作团队）** - 持久化协作系统
    - 多个 TeamMembers 协作完成复杂任务
    - 智能任务路由：Team 内/Team 外自动切换
+   - Team 内任务由 TeamMembers 协作完成
+   - Team 外任务直接由 Agent 完成
    - 每个专注特定领域（开发、研究、测试等）
    - 支持自由进入/退出 Team
 
-3. **Worker（执行者）** - Think-Act 模式
+2. **Agent（执行者）** - Think-Act 模式
    - 透明化的思考过程
    - 精确的工具调用
    - 完全可控的执行流程
+   - 面向对象设计，易于扩展和定制
 
 ---
 
@@ -124,49 +121,9 @@ Agent: (128 + 256) × 0.75 = 288
 
 ## 📚 使用方式
 
-### 方式 1：使用 Manager（推荐）
+### 方式 1：使用 Agent 类（推荐）
 
-**适用场景**：通用任务处理、需要智能任务分类和评估
-
-```js
-import 'dotenv/config';
-import { initLLM } from './src/llm.js';
-import { runManager } from './src/manager.js';
-import './src/skills/builtins.js';
-
-initLLM();
-
-const result = await runManager('读取当前目录下的文件并统计数量', {
-  verbose: true,  // 打印中间过程
-});
-
-console.log(result.finalResult);  // 最终答案
-console.log(result.guidance);     // 执行指引（关键需求、建议工具、执行步骤）
-console.log(result.evaluation);   // 结果评估（评分 1-5）
-```
-
-#### Manager 返回值说明
-
-```js
-const result = await runManager('任务内容', { verbose: true });
-
-// 判断决策
-console.log(result.decision);     // 判断文本
-console.log(result.needsAgent);   // 是否使用了 agent
-
-// 执行指引
-console.log(result.guidance.keyRequirements);  // 关键需求数组
-console.log(result.guidance.suggestedTools);  // 建议工具数组
-console.log(result.guidance.executionSteps);  // 执行步骤文本
-
-// 执行结果
-console.log(result.agentResult);  // Worker agent 的完整结果
-console.log(result.directAnswer); // 直接回答的内容
-console.log(result.evaluation);   // 结果评估（评分 1-5）
-console.log(result.finalResult);  // 最终答案
-```
-
-### 方式 2：使用 Team 协作系统
+**适用场景**：通用任务处理、需要扩展和定制
 
 **适用场景**：复杂多步任务、需要多个专业 Agents 协作
 
@@ -241,7 +198,7 @@ await teamSystem.exitTeam();
 npm run demo:team
 ```
 
-### 方式 3：使用 Agent 类（面向对象）
+### 方式 3：使用 Agent 类（面向对象，高级定制）
 
 **适用场景**：需要扩展、定制、多 Agent 协作
 
@@ -339,7 +296,7 @@ npm run demo:agent
 
 📖 **完整文档**：查看 [AGENT_OO_REFACTORING.md](./AGENT_OO_REFACTORING.md) 了解面向对象设计的详细信息。
 
-### 方式 4：直接使用 Worker Agent（函数式，兼容）
+### 方式 4：使用函数式接口（向后兼容）
 
 **适用场景**：需要完全自主控制、调试 Agent 行为
 
@@ -361,21 +318,6 @@ console.log(actions);   // 执行的 Skill 和结果
 console.log(result);    // 最终答案
 ```
 
-**携带对话历史实现多轮对话：**
-
-```js
-const history = [];
-
-// 第一轮
-const r1 = await runManager('我叫小明', { history });
-history.push({ role: 'user', content: '我叫小明' });
-history.push({ role: 'assistant', content: r1.finalResult });
-
-// 第二轮（LLM 记得上文）
-const r2 = await runManager('我叫什么名字？', { history });
-console.log(r2.finalResult); // → 你叫小明
-```
-
 **获取完整的执行过程（调试用）：**
 
 ```js
@@ -393,33 +335,6 @@ console.log('📊 最终结果：', result);
 
 ## 🎖️ 核心概念
 
-### Manager —— 智能任务编排 Agent
-
-**Manager** 是 jsClaw 的任务编排层，位于用户和 Worker Agent 之间。
-
-**工作流程：**
-```
-用户任务
-   ↓
-[Manager 判断]
-   ├─ 简单任务 → [直接回答] → 最终结果
-   └─ 复杂任务 → [生成执行指引] → [Worker Agent]
-                                      ↓
-                                 [执行工具]
-                                      ↓
-                                 [Manager 评估] → 最终结果
-```
-
-**优势：**
-- ✅ 减少重复判断 - Manager 和 Worker Agent 不再重复分析任务
-- ✅ 降低 Token 消耗 - 只传递相关工具给 Worker Agent
-- ✅ 紧密协作 - Manager 的判断结果被充分利用
-- ✅ 向后兼容 - 保留 `runAgentWithThink()` 接口
-
-详见 [MANAGER.md](./MANAGER.md) 和 [REFACTORING.md](./REFACTORING.md)
-
----
-
 ### Team —— 协作团队
 
 **Team** 是 jsClaw 的协作层，支持持久化的团队协作。
@@ -428,31 +343,29 @@ console.log('📊 最终结果：', result);
 
 1. **Team（团队）** - 持久化的工作环境，专门处理某一类任务
 2. **TeamMember（成员）** - 具有特定技能组的 Agent
-3. **Leader（队长）** - Team 的编排者，负责：
+3. **TeamLeader（队长）** - Team 的编排者，负责：
    - 在 Team 内：接收任务 → 组织 TeamMembers 执行 → 输出结果
-   - 在 Team 外：接收任务 → 决定自己完成或引导用户进入 Team
 
 **工作流程：**
 ```
 用户任务
    ↓
-[Leader 决策]
-   ├─ Team 外简单任务 → [Leader 直接回答] → 最终结果
-   ├─ Team 外复杂任务 → [引导用户进入 Team]
+[TeamLab 决策]
+   ├─ Team 外任务 → [Agent 完成]
    └─ Team 内任务 → [Team Leader 组织 TeamMembers] → [TeamMembers 执行] → 最终结果
 ```
 
 **优势：**
 - ✅ 任务分类更清晰 - 每个 Team 专注于特定领域
-- ✅ 资源利用更高效 - Team 外简单任务不启动 TeamMembers
+- ✅ 资源利用更高效 - Team 外简单任务直接用 Agent 完成
 - ✅ 协作更灵活 - 可多个 Team 并存，用户自由进入和退出
-- ✅ 智能决策 - Leader 判断在哪里完成任务最合适
+- ✅ 智能路由 - 自动判断是否需要进入 Team
 
 详见 [TEAM.md](./TEAM.md)
 
 ---
 
-### Worker Agent —— Think-Act 模式
+### Agent —— Think-Act 模式
 
 **Think-Act 模式**，分两个阶段处理：
 
@@ -481,7 +394,6 @@ jsClaw/
 │   ├── index.js              # 命令行交互入口（REPL）
 │   ├── llm.js                # LLM 客户端封装，支持多 Provider
 │   ├── agent.js              # Agent 类（Think-Act 模式，面向对象）
-│   ├── manager.js            # Manager 任务编排 Agent
 │   ├── Team.js               # Team 类，持久化协作团队
 │   ├── TeamMember.js         # TeamMember 类，具有基础技能和角色技能的 Agent
 │   ├── TeamLeader.js         # Team 内的 Leader，任务编排和 TeamMember 管理
@@ -501,10 +413,8 @@ jsClaw/
 │               └── _meta.json
 ├── .env                      # 本地配置（不进 git）
 ├── .env.example              # 配置模板
-├── MANAGER.md                # Manager 使用文档
 ├── TEAM.md                   # Team 使用文档
 ├── AGENT_OO_REFACTORING.md   # Agent 面向对象重构文档
-├── REFACTORING.md            # Manager 重构说明文档
 ├── GIT_UTF8_CONFIG.md        # Git 中文编码配置指南
 └── package.json
 ```
@@ -748,22 +658,21 @@ npm run skill:installed           # 查看已安装
 
 ---
 
-## 💡 Manager vs Team vs Agent 选择指南
+## 💡 Team vs Agent 选择指南
 
-| 场景 | 使用 Manager | 使用 Team | 使用 Agent 类 |
-|------|-------------|----------|---------------|
-| 通用任务处理 | ✅ 推荐 | - | - |
-| 需要任务分类和评估 | ✅ 推荐 | - | - |
-| 复杂多步任务 | ✅ 推荐 | ✅ 推荐 | ✅ 推荐 |
-| 需要多个专业 Agents 协作 | - | ✅ 推荐 | ✅ 推荐 |
-| 简单任务（知识问答） | ✅ 自动优化 | ✅ 自动优化 | ❌ 浪费资源 |
-| 完全自主控制 | ❌ 不推荐 | ❌ 不推荐 | ✅ 推荐 |
-| 调试 Agent 行为 | - | - | ✅ 更直观 |
-| 需要扩展和定制 | - | - | ✅ 推荐 |
-| 多 Agent 协作 | - | ✅ 推荐 | ✅ 推荐 |
+| 场景 | 使用 Team | 使用 Agent 类 |
+|------|----------|---------------|
+| 通用任务处理 | - | ✅ 推荐 |
+| 复杂多步任务 | ✅ 推荐 | ✅ 推荐 |
+| 需要多个专业 Agents 协作 | ✅ 推荐 | ✅ 推荐 |
+| 简单任务（知识问答） | ✅ 自动优化 | ❌ 浪费资源 |
+| 完全自主控制 | ❌ 不推荐 | ✅ 推荐 |
+| 调试 Agent 行为 | - | ✅ 更直观 |
+| 需要扩展和定制 | - | ✅ 推荐 |
+| 多 Agent 协作 | ✅ 推荐 | ✅ 推荐 |
 
 **建议：**
-- 日常使用推荐 **Manager**
+- 日常使用推荐 **Agent 类**
 - 复杂协作任务使用 **Team**
 - 需要扩展、定制或多 Agent 协作使用 **Agent 类**
 - 调试时使用 **Agent 类** 或 **Worker Agent（函数式）**
@@ -773,10 +682,9 @@ npm run skill:installed           # 查看已安装
 ## 🛣️ 开发计划
 
 - [x] Think-Act 模式（思考 + 行动分离）
-- [x] Manager 任务编排 Agent
-- [x] 执行指引优化（减少 token 消耗）
 - [x] Team 协作系统
 - [x] Agent 面向对象重构
+- [x] Team 外任务直接使用 Agent（移除 Manager）
 - [ ] 流式输出支持（stream 模式）
 - [ ] Skill 异步并行执行
 - [ ] Web UI 界面
@@ -786,10 +694,8 @@ npm run skill:installed           # 查看已安装
 
 ## 📖 详细文档
 
-- [MANAGER.md](./MANAGER.md) - Manager 使用文档
 - [TEAM.md](./TEAM.md) - Team 使用文档
 - [AGENT_OO_REFACTORING.md](./AGENT_OO_REFACTORING.md) - Agent 面向对象重构文档
-- [REFACTORING.md](./REFACTORING.md) - Manager 重构说明文档
 - [API_KEY_SETUP_GUIDE.md](./API_KEY_SETUP_GUIDE.md) - API Key 配置指南
 - [GIT_UTF8_CONFIG.md](./GIT_UTF8_CONFIG.md) - Git 中文编码配置指南
 
