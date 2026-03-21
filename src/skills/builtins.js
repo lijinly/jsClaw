@@ -183,6 +183,158 @@ registerSkill({
   },
 });
 
+// ⑥ 执行 shell 命令
+import { execSync } from 'child_process';
+
+registerSkill({
+  name: 'exec',
+  description: '在工作区目录下执行 shell 命令，返回 stdout + stderr 输出。适合运行 npm、git、node 等命令。注意：会实际执行系统命令，请谨慎使用。',
+  parameters: {
+    type: 'object',
+    properties: {
+      command: { type: 'string', description: '要执行的命令，例如 "npm install" 或 "git status"' },
+      cwd: { type: 'string', description: '工作目录（相对于工作区根目录，默认为工作区根目录）' },
+      timeout: { type: 'number', description: '超时时间（毫秒），默认 30000（30秒）' },
+    },
+    required: ['command'],
+  },
+  async execute({ command, cwd, timeout = 30000 }) {
+    try {
+      const workDir = cwd
+        ? resolveSafePath(cwd)
+        : path.resolve(WORKSPACE_ROOT);
+
+      console.log(`[exec] 执行命令：${command} (cwd: ${workDir})`);
+
+      const output = execSync(command, {
+        cwd: workDir,
+        timeout,
+        encoding: 'utf-8',
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+
+      return output || '(命令执行成功，无输出)';
+    } catch (err) {
+      // execSync 失败时 err.stdout / err.stderr 包含输出
+      const stdout = err.stdout || '';
+      const stderr = err.stderr || '';
+      const combined = [stdout, stderr].filter(Boolean).join('\n');
+      return `命令执行失败（exit code: ${err.status ?? '?'}）:\n${combined || err.message}`;
+    }
+  },
+});
+
+// ⑦ 抓取网页内容（HTML → Markdown）
+import https from 'https';
+
+// 企业网络/代理环境下可能存在 SSL 证书验证问题，提供可配置的绕过选项
+// 通过 NODE_FETCH_REJECT_UNAUTHORIZED=false 环境变量可关闭证书验证（仅开发环境）
+const REJECT_UNAUTHORIZED = process.env.NODE_FETCH_REJECT_UNAUTHORIZED !== 'false';
+
+registerSkill({
+  name: 'web_fetch',
+  description: '获取指定 URL 的网页内容，自动提取正文并转换为 Markdown 格式。适合读取文档、博客文章、API 说明等。',
+  parameters: {
+    type: 'object',
+    properties: {
+      url: { type: 'string', description: '要抓取的网页 URL，例如 "https://nodejs.org/docs"' },
+    },
+    required: ['url'],
+  },
+  async execute({ url }) {
+    try {
+      console.log(`[web_fetch] 抓取: ${url}`);
+
+      // 构建 fetch 选项，支持自定义 SSL 策略
+      const fetchOptions = {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; jsClaw/1.0)',
+          'Accept': 'text/html,application/xhtml+xml,*/*',
+        },
+        signal: AbortSignal.timeout(15000),
+      };
+
+      // 如果需要绕过 SSL 验证（企业代理环境），使用自定义 agent
+      if (!REJECT_UNAUTHORIZED) {
+        const agent = new https.Agent({ rejectUnauthorized: false });
+        // Node 内置 fetch 通过 dispatcher 支持自定义 agent（Node 18+）
+        // 但内置 fetch 不直接支持 agent 参数，改用环境变量
+        process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+      }
+
+      const response = await fetch(url, fetchOptions);
+
+      if (!response.ok) {
+        return `抓取失败：HTTP ${response.status} ${response.statusText}`;
+      }
+
+      const contentType = response.headers.get('content-type') || '';
+      const text = await response.text();
+
+      // 如果是纯文本/JSON/Markdown，直接返回
+      if (!contentType.includes('text/html')) {
+        return text.slice(0, 20000); // 限制长度
+      }
+
+      // HTML → 简单文本提取（去掉标签）
+      const markdown = htmlToMarkdown(text);
+      return markdown.slice(0, 20000); // 限制 20000 字符防止 token 爆炸
+    } catch (err) {
+      // 对 SSL 证书错误给出明确提示
+      if (err.message?.includes('certificate') || err.cause?.message?.includes('certificate')) {
+        return `抓取失败（SSL证书错误）：${err.cause?.message || err.message}\n\n💡 提示：如果你在企业网络/代理环境下，可以在 .env 文件中设置 NODE_FETCH_REJECT_UNAUTHORIZED=false 来绕过证书验证。`;
+      }
+      return `抓取失败：${err.message}`;
+    }
+  },
+});
+
+/**
+ * 简单的 HTML → Markdown 转换
+ * 不依赖第三方库，覆盖常见标签
+ */
+function htmlToMarkdown(html) {
+  return html
+    // 移除 script/style/head 块
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<head[\s\S]*?<\/head>/gi, '')
+    // 标题
+    .replace(/<h1[^>]*>([\s\S]*?)<\/h1>/gi, '\n# $1\n')
+    .replace(/<h2[^>]*>([\s\S]*?)<\/h2>/gi, '\n## $1\n')
+    .replace(/<h3[^>]*>([\s\S]*?)<\/h3>/gi, '\n### $1\n')
+    .replace(/<h[4-6][^>]*>([\s\S]*?)<\/h[4-6]>/gi, '\n#### $1\n')
+    // 链接
+    .replace(/<a[^>]+href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi, '[$2]($1)')
+    // 强调
+    .replace(/<strong[^>]*>([\s\S]*?)<\/strong>/gi, '**$1**')
+    .replace(/<b[^>]*>([\s\S]*?)<\/b>/gi, '**$1**')
+    .replace(/<em[^>]*>([\s\S]*?)<\/em>/gi, '*$1*')
+    .replace(/<i[^>]*>([\s\S]*?)<\/i>/gi, '*$1*')
+    // 代码
+    .replace(/<code[^>]*>([\s\S]*?)<\/code>/gi, '`$1`')
+    .replace(/<pre[^>]*>([\s\S]*?)<\/pre>/gi, '\n```\n$1\n```\n')
+    // 列表
+    .replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, '\n- $1')
+    // 段落和换行
+    .replace(/<p[^>]*>/gi, '\n\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '')
+    .replace(/<\/div>/gi, '\n')
+    // 去掉所有剩余 HTML 标签
+    .replace(/<[^>]+>/g, '')
+    // HTML 实体
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    // 清理多余空行
+    .replace(/\n{4,}/g, '\n\n\n')
+    .trim();
+}
+
 // ── ClaWHub Skill 懒加载工具 ─────────────────────
 
 const PLUGINS_DIR = path.join(__dirname, '..', 'skills', 'plugins');
@@ -201,7 +353,7 @@ function getSkillDir(slug) {
   return path.join(PLUGINS_DIR, slug);
 }
 
-// ⑥ 列出已安装的 Skill（懒加载入口）
+// ⑧ 列出已安装的 Skill（懒加载入口）
 registerSkill({
   name: 'list_skills',
   description: '列出所有已安装的 ClaWHub Skill（仅返回名称和描述）。当你不知道有哪些 Skill 可用时，先调用此工具。',
@@ -223,7 +375,7 @@ registerSkill({
   },
 });
 
-// ⑦ 读取指定 Skill 的 SKILL.md（按需加载）
+// ⑨ 读取指定 Skill 的 SKILL.md（按需加载）
 registerSkill({
   name: 'read_skill',
   description: '读取已安装 Skill 的完整说明文档（SKILL.md）。当你需要了解某个 Skill 的具体使用方法时，先调用 list_skills 查看有哪些 Skill，然后调用此工具读取具体的 SKILL.md。',
