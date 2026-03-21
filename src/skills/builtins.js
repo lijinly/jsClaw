@@ -544,7 +544,58 @@ registerSkill({
   },
 });
 
-// ── ClaWHub Skill 懒加载工具 ─────────────────────
+// ⑩ 浏览器自动化（使用 Playwright 连接系统浏览器）
+import { chromium } from 'playwright';
+
+/**
+ * 全局浏览器实例（复用连接，避免每次都启动新浏览器）
+ * key: browserType (chromium/firefox/webkit)
+ */
+let browserCache = null;
+
+async function getBrowser(browserType = 'chromium') {
+  if (browserCache && browserCache.isConnected()) {
+    return browserCache;
+  }
+
+  // 连接到系统已安装的 Chrome/Edge（Windows）
+  // Chrome: --remote-debugging-port=9222
+  // Edge: --remote-debugging-port=9223
+  let cdpEndpoint;
+  if (browserType === 'chromium') {
+    // 尝试连接 Chrome (9222) 或 Edge (9223)
+    try {
+      browserCache = await chromium.connectOverCDP('http://localhost:9222');
+      console.log(`[browser] 已连接到 Chrome (CDP: 9222)`);
+      return browserCache;
+    } catch {
+      try {
+        browserCache = await chromium.connectOverCDP('http://localhost:9223');
+        console.log(`[browser] 已连接到 Edge (CDP: 9223)`);
+        return browserCache;
+      } catch {
+        throw new Error('无法连接到浏览器。请确保 Chrome/Edge 以 --remote-debugging-port=9222 启动。\n启动命令示例：\n  Chrome: chrome.exe --remote-debugging-port=9222\n  Edge: msedge.exe --remote-debugging-port=9222');
+      }
+    }
+  }
+
+  throw new Error(`不支持的浏览器类型: ${browserType}`);
+}
+
+registerSkill({
+  name: 'browser',
+  description: '浏览器自动化工具。支持打开页面、截图、点击、填表单、提取文本等操作。需要预先启动浏览器并开启远程调试端口。',\n  parameters: {
+n    type: 'object',
+    properties: {
+      action: { 
+        type: 'string', 
+        description: '操作类型：open/page/screenshot/click/fill/type/select/evaluate/close',\n        enum: ['open', 'page', 'screenshot', 'click', 'fill', 'type', 'select', 'evaluate', 'close']\n      },
+n      url: { type: 'string', description: '要打开的 URL（open action 使用）' },
+n      selector: { type: 'string', description: 'CSS 选择器（click/fill/type/select action 使用）' },
+n      text: { type: 'string', description: '要输入的文本（fill/type action 使用）或要选择的选项文本（select action 使用）' },
+n      script: { type: 'string', description: '要执行的 JavaScript 代码（evaluate action 使用）' },
+n      path: { type: 'string', description: '截图保存路径（相对于工作区根目录，screenshot action 使用）' },
+n    },\n    required: ['action'],\n  },\n  async execute({ action, url, selector, text, script, path: screenshotPath }) {\n    try {\n      const browser = await getBrowser();\n      const context = browser.contexts()[0] || await browser.newContext();\n      const pages = context.pages();\n      const page = pages[0] || await context.newPage();\n\n      switch (action) {\n        case 'open': {\n          console.log(`[browser] 打开页面: ${url}`);\n          await page.goto(url);\n          return `✅ 已打开: ${url}`;\n        }\n\n        case 'page': {\n          const title = await page.title();\n          const currentUrl = page.url();\n          return `当前页面：\n  标题：${title}\n  URL：${currentUrl}`;\n        }\n\n        case 'screenshot': {\n          const savePath = screenshotPath ? resolveSafePath(screenshotPath) : resolveSafePath('screenshot.png');\n          await page.screenshot({ path: savePath, fullPage: false });\n          return `✅ 截图已保存: ${savePath}`;\n        }\n\n        case 'click': {\n          console.log(`[browser] 点击: ${selector}`);\n          await page.click(selector);\n          return `✅ 已点击: ${selector}`;\n        }\n\n        case 'fill': {\n          console.log(`[browser] 填写: ${selector} = ${text}`);\n          await page.fill(selector, text);\n          return `✅ 已填写: ${selector}`;\n        }\n\n        case 'type': {\n          console.log(`[browser] 输入: ${selector} = ${text}`);\n          await page.type(selector, text);\n          return `✅ 已输入: ${selector}`;\n        }\n\n        case 'select': {\n          console.log(`[browser] 选择: ${selector} = ${text}`);\n          await page.selectOption(selector, text);\n          return `✅ 已选择: ${selector}`;\n        }\n\n        case 'evaluate': {\n          console.log(`[browser] 执行脚本`);\n          const result = await page.evaluate(script);\n          return typeof result === 'object' ? JSON.stringify(result, null, 2) : String(result);\n        }\n\n        case 'close': {\n          console.log(`[browser] 关闭页面`);\n          await page.close();\n          return '✅ 页面已关闭';\n        }\n\n        default:\n          return `未知操作: ${action}`;\n      }\n    } catch (err) {\n      // 关闭浏览器连接（出错时）\n      if (browserCache?.isConnected()) {\n        await browserCache.close().catch(() => {});\n        browserCache = null;\n      }\n      return `浏览器操作失败: ${err.message}`;\n    }\n  },\n});\n\n// ── ClaWHub Skill 懒加载工具 ─────────────────────
 
 const PLUGINS_DIR = path.join(__dirname, '..', 'skills', 'plugins');
 const INDEX_FILE = path.join(PLUGINS_DIR, 'index.json');
@@ -584,7 +635,7 @@ registerSkill({
   },
 });
 
-// ⑪ 读取指定 Skill 的 SKILL.md（按需加载）
+// ⑫ 读取指定 Skill 的 SKILL.md（按需加载）
 registerSkill({
   name: 'read_skill',
   description: '读取已安装 Skill 的完整说明文档（SKILL.md）。当你需要了解某个 Skill 的具体使用方法时，先调用 list_skills 查看有哪些 Skill，然后调用此工具读取具体的 SKILL.md。',

@@ -216,11 +216,109 @@ Agent: (128 + 256) × 0.75 = 288
 
 jsClaw 预装了以下实用技能，开箱即用：
 
-| 技能名 | 描述 | 参数 | 示例 |
-|-------|------|------|------|
-| `calculate` | 执行数学运算 | `expression: string` | `calculate({ expression: "3 * (4 + 2)" })` → `"18"` |
-| `get_current_time` | 获取当前日期时间 | 无 | `get_current_time()` → `"2026/3/18 12:30:45"` |
-| `web_search` | 多引擎实时网络搜索 | `query: string`, `engine?: string`, `limit?: number` | `web_search({ query: "最新AI技术", engine: "bing", limit: 5 })` |
+### 基础工具（OpenClaw 风格）
+
+| 技能名 | 描述 | 参数 |
+|-------|------|------|
+| `read` | 读取文件内容 | `path: string`（相对工作区根目录） |
+| `write` | 创建或覆盖文件 | `path: string`, `content: string` |
+| `list` | 列出目录内容 | `path?: string`, `recursive?: boolean`, `showHidden?: boolean` |
+| `edit` | 精准替换文件内容 | `path: string`, `old_str: string`, `new_str: string` |
+| `apply_patch` | 应用 unified diff 补丁 | `patch: string` |
+| `exec` | 执行 shell 命令 | `command: string`, `cwd?: string`, `timeout?: number` |
+| `web_search` | 多引擎实时网络搜索 | `query: string`, `engine?: string`, `limit?: number` |
+| `web_fetch` | 抓取网页内容（HTML → Markdown） | `url: string` |
+| `message` | 发送消息到企业微信群聊 | `webhookUrl: string`, `content: string`, `mentioned_list?: string[]` |
+| `browser` | 浏览器自动化（需先启动调试端口） | `action: string`, `url?/selector?/text?/script?` |
+| `list_skills` | 列出已安装的 Skill | 无 |
+| `read_skill` | 读取 Skill 详细说明 | `name: string` |
+
+### 🌐 Web Search 详解
+
+**jsClaw 已集成 open-websearch！** 框架现在内置了功能完整的网络搜索能力。
+
+#### 支持的搜索引擎
+
+| 引擎 | 简介 | 无需 API Key |
+|-----|------|-----------|
+| **bing** | 微软 Bing 搜索（默认） | ✅ |
+| **duckduckgo** | 隐私友好型搜索 | ✅ |
+| **baidu** | 百度搜索（中文友好） | ✅ |
+| **csdn** | CSDN 技术博客搜索 | ✅ |
+
+#### 使用示例
+
+```js
+// 基础搜索
+const result = await web_search({ 
+  query: "Node.js 最佳实践" 
+});
+
+// 指定引擎
+const result = await web_search({ 
+  query: "React 18 新特性",
+  engine: "baidu",
+  limit: 10
+});
+```
+
+#### 优势
+
+✅ **无需 API Key** - 完全免费使用  
+✅ **多引擎支持** - 灵活切换搜索源  
+✅ **实时信息** - 获取最新的网络数据  
+✅ **中文支持** - 内置百度和 CSDN 搜索  
+
+### 🌍 Browser 详解
+
+**浏览器自动化**，基于 Playwright 实现页面操作、截图、点击、填表单等功能。
+
+#### 使用前准备
+
+1. 启动浏览器并开启调试端口：
+
+```bash
+# Windows Chrome
+chrome.exe --remote-debugging-port=9222
+
+# Windows Edge
+msedge.exe --remote-debugging-port=9223
+```
+
+2. jsClaw 会自动连接到已启动的浏览器。
+
+#### 支持的操作
+
+| action | 说明 | 参数 |
+|--------|------|------|
+| `open` | 打开页面 | `url` |
+| `page` | 获取当前页面信息 | 无 |
+| `screenshot` | 截图 | `path?: string`（保存路径） |
+| `click` | 点击元素 | `selector`（CSS 选择器） |
+| `fill` | 填写表单 | `selector`, `text` |
+| `type` | 模拟输入 | `selector`, `text` |
+| `select` | 下拉选择 | `selector`, `text` |
+| `evaluate` | 执行 JavaScript | `script` |
+| `close` | 关闭页面 | 无 |
+
+#### 使用示例
+
+```js
+// 打开页面
+await browser({ action: 'open', url: 'https://example.com' });
+
+// 截图
+await browser({ action: 'screenshot', path: 'screenshot.png' });
+
+// 点击按钮
+await browser({ action: 'click', selector: 'button#submit' });
+
+// 填写表单
+await browser({ action: 'fill', selector: 'input[name="username"]', text: 'testuser' });
+
+// 执行脚本
+await browser({ action: 'evaluate', script: 'document.title' });
+```
 
 ### 🔍 Web Search 详解
 
