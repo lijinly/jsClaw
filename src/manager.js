@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────
-//  Sheepy —— 任务编排与分发 Agent
+//  Manager —— 任务编排与分发 Agent
 //  职责：接收任务、判断需求、分发执行、评估结果、返回最终答案
 // ─────────────────────────────────────────────
 import { chat } from './llm.js';
@@ -7,7 +7,7 @@ import { runAgentWithGuidance } from './agent.js';
 import { getToolDefinitions } from './skillRegistry.js';
 
 /**
- * Sheepy 主流程
+ * Manager 主流程
  * 1. 判断任务类型（直接回答 vs 需要 agent）
  * 2. 分发执行
  * 3. 评估结果
@@ -15,13 +15,13 @@ import { getToolDefinitions } from './skillRegistry.js';
  *
  * @param {string} task - 用户任务
  * @param {object} options
- * @param {string}   [options.systemPrompt]   - Sheepy 的系统提示词
+ * @param {string}   [options.systemPrompt]   - Manager 的系统提示词
  * @param {Array}    [options.history]        - 对话历史
  * @param {boolean}  [options.verbose]        - 是否打印中间过程
  * @param {object}   [options.agentOptions]   - 传递给 worker agent 的配置
  * @returns {object} { decision, agentResult, evaluation, finalResult }
  */
-export async function runSheepy(task, {
+export async function runManager(task, {
   systemPrompt,
   history = [],
   verbose = false,
@@ -31,7 +31,7 @@ export async function runSheepy(task, {
   // ──────────────────────────────────────────
   // 第一步：判断任务类型
   // ──────────────────────────────────────────
-  const judgeSystemPrompt = `${systemPrompt || '你是 Sheepy，一个任务编排助手。'}
+  const judgeSystemPrompt = `${systemPrompt || '你是 Manager，一个任务编排助手。'}
 
 你的职责是判断用户任务的处理方式，并为复杂任务提供执行指引：
 1. 简单任务：直接回答即可（例如：知识问答、计算、简单总结）
@@ -59,7 +59,7 @@ ${getToolDefinitions().map(t => `- ${t.function.name}: ${t.function.description}
   const decisionText = judgeResponse.content;
 
   if (verbose) {
-    console.log('\n🐑 [Sheepy - 判断阶段]\n', decisionText);
+    console.log('\n👔 [Manager - 判断阶段]\n', decisionText);
   }
 
   // 解析判断结果
@@ -86,7 +86,7 @@ ${getToolDefinitions().map(t => `- ${t.function.name}: ${t.function.description}
     };
 
     if (verbose) {
-      console.log('\n🐑 [Sheepy - 执行指引]');
+      console.log('\n👔 [Manager - 执行指引]');
       console.log('  关键需求:', guidance.keyRequirements);
       console.log('  建议工具:', guidance.suggestedTools);
       console.log('  执行步骤:', guidance.executionSteps);
@@ -102,7 +102,7 @@ ${getToolDefinitions().map(t => `- ${t.function.name}: ${t.function.description}
   if (needsAgent) {
     // 需要 agent 参与：调用 worker agent，并传递执行指引
     if (verbose) {
-      console.log('\n🐑 [Sheepy - 分发任务给 Worker Agent]');
+      console.log('\n👔 [Manager - 分发任务给 Worker Agent]');
     }
 
     agentResult = await runAgentWithGuidance(task, {
@@ -113,12 +113,12 @@ ${getToolDefinitions().map(t => `- ${t.function.name}: ${t.function.description}
     });
 
     if (verbose) {
-      console.log('\n🐑 [Sheepy - Worker Agent 完成]\n');
+      console.log('\n👔 [Manager - Worker Agent 完成]\n');
     }
   } else {
     // 简单任务：直接回答
     if (verbose) {
-      console.log('\n🐑 [Sheepy - 直接回答]');
+      console.log('\n👔 [Manager - 直接回答]');
     }
 
     const directSystemPrompt = `${systemPrompt || '你是一个智能助手。'}
@@ -144,7 +144,7 @@ ${getToolDefinitions().map(t => `- ${t.function.name}: ${t.function.description}
   let evaluation = null;
 
   if (needsAgent && agentResult) {
-    const evaluateSystemPrompt = `你是 Sheepy 的质量评估员。
+    const evaluateSystemPrompt = `你是 Manager 的质量评估员。
 你的任务是评估 Worker Agent 的执行结果是否满足用户需求。
 
 评估维度：
@@ -170,7 +170,7 @@ ${getToolDefinitions().map(t => `- ${t.function.name}: ${t.function.description}
     evaluation = evaluateResponse.content;
 
     if (verbose) {
-      console.log('\n🐑 [Sheepy - 结果评估]\n', evaluation);
+      console.log('\n👔 [Manager - 结果评估]\n', evaluation);
     }
   }
 
@@ -187,7 +187,7 @@ ${getToolDefinitions().map(t => `- ${t.function.name}: ${t.function.description}
   }
 
   if (verbose) {
-    console.log('\n🐑 [Sheepy - 最终结果]\n', finalResult);
+    console.log('\n👔 [Manager - 最终结果]\n', finalResult);
   }
 
   return {

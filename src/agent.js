@@ -19,7 +19,7 @@ export async function runAgentWithThink(userMessage, { systemPrompt, history = [
 
 /**
  * Think-Act 模式（带执行指引）
- * 接收来自 Sheepy 的执行指引，优化执行效率
+ * 接收来自 Manager 的执行指引，优化执行效率
  *
  * @param {string} userMessage - 用户输入
  * @param {object} options

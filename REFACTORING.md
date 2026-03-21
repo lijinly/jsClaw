@@ -1,10 +1,10 @@
-# Sheepy + Worker Agent 重构说明 (方案 C)
+# Manager + Worker Agent 重构说明 (方案 C)
 
 ## 📋 重构概述
 
-**重构目标:** 优化 Sheepy 和 Worker Agent 的协作效率,减少重复判断,降低 token 消耗
+**重构目标:** 优化 Manager 和 Worker Agent 的协作效率,减少重复判断,降低 token 消耗
 
-**采用方案:** 方案 C - Sheepy 提供执行指引给 Worker Agent
+**采用方案:** 方案 C - Manager 提供执行指引给 Worker Agent
 
 ## 🔄 重构前后对比
 
@@ -13,41 +13,41 @@
 ```
 用户任务
   ↓
-[Sheepy 判断] → 决策: 需要 agent
+[Manager 判断] → 决策: 需要 agent
   ↓
 [Worker Agent - Think 阶段] → 再次分析任务,规划工具
   ↓
 [Worker Agent - Act 阶段] → 调用所有可用工具
   ↓
-[Sheepy 评估] → 评估结果
+[Manager 评估] → 评估结果
 ```
 
 **问题:**
-- ❌ Sheepy 和 Worker Agent 重复判断任务类型
+- ❌ Manager 和 Worker Agent 重复判断任务类型
 - ❌ Worker Agent 接收所有工具定义,浪费 token
-- ❌ Sheepy 的判断结果未被充分利用
+- ❌ Manager 的判断结果未被充分利用
 
 ### 重构后
 
 ```
 用户任务
   ↓
-[Sheepy 判断] → 决策 + 执行指引(关键需求、建议工具、执行步骤)
+[Manager 判断] → 决策 + 执行指引(关键需求、建议工具、执行步骤)
   ↓
 [Worker Agent - Act 阶段] → 根据指引,只使用建议的工具
   ↓
-[Sheepy 评估] → 评估结果
+[Manager 评估] → 评估结果
 ```
 
 **改进:**
 - ✅ 消除重复判断
 - ✅ 只传递相关工具,减少 token 消耗
-- ✅ Sheepy 的判断结果被充分利用
+- ✅ Manager 的判断结果被充分利用
 - ✅ 保留 Worker Agent 的灵活性(基于指引执行)
 
 ## 📝 核心代码变更
 
-### 1. Sheepy 增强功能 (`src/sheepy.js`)
+### 1. Manager 增强功能 (`src/manager.js`)
 
 #### 1.1 增强判断提示词
 
@@ -260,9 +260,9 @@ export async function runAgentWithThink(userMessage, { systemPrompt, history = [
 
 ## 📦 相关文件
 
-- `src/sheepy.js` - Sheepy 核心实现 (已更新)
+- `src/manager.js` - Manager 核心实现 (已更新)
 - `src/agent.js` - Worker Agent 实现 (已更新)
-- `src/demo-sheepy.js` - 演示示例 (已更新)
+- `src/demo-manager.js` - 演示示例 (已更新)
 - `c:/Users/lijin/WorkBuddy/20260317164838/.workbuddy/memory/agent-llm-skill-flow.md` - 详细分析文档
 
 ## 🚀 使用方法
@@ -271,11 +271,11 @@ export async function runAgentWithThink(userMessage, { systemPrompt, history = [
 
 ```javascript
 import { initLLM } from './llm.js';
-import { runSheepy } from './sheepy.js';
+import { runManager } from './manager.js';
 
 initLLM();
 
-const result = await runSheepy('任务内容', {
+const result = await runManager('任务内容', {
   verbose: true,
 });
 
@@ -285,7 +285,7 @@ console.log(result.finalResult);
 ### 获取执行指引
 
 ```javascript
-const result = await runSheepy('复杂任务', {
+const result = await runManager('复杂任务', {
   verbose: true,
 });
 
@@ -311,7 +311,7 @@ const result = await runAgentWithThink('任务内容', {
 1. **向后兼容**: 保留 `runAgentWithThink()` 接口,现有代码无需改动
 2. **智能筛选**: 只传递相关工具,减少 token 消耗
 3. **灵活执行**: Worker Agent 仍可根据指引灵活调整执行策略
-4. **协作紧密**: Sheepy 的判断结果被充分利用,避免重复工作
+4. **协作紧密**: Manager 的判断结果被充分利用,避免重复工作
 5. **可追溯**: 完整保留执行指引和评估结果,便于调试和优化
 
 ## 🔮 未来优化方向
@@ -319,4 +319,4 @@ const result = await runAgentWithThink('任务内容', {
 1. **工具建议优化**: 可以基于历史任务统计,自动优化工具选择
 2. **执行步骤细化**: 可以增加更详细的执行步骤和参数建议
 3. **结果缓存**: 对相同任务可以缓存执行指引,进一步优化性能
-4. **学习机制**: Worker Agent 可以反馈执行效果,帮助 Sheepy 优化判断
+4. **学习机制**: Worker Agent 可以反馈执行效果,帮助 Manager 优化判断

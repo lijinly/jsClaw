@@ -14,9 +14,9 @@ jsClaw 从另一个方向出发——**能跑起来的最小实现**。整个框
 
 ---
 
-## 🆕 Sheepy —— 智能任务编排 Agent
+## 🆕 Manager —— 智能任务编排 Agent
 
-**Sheepy** 是 jsClaw 的任务编排层，位于用户和 Worker Agent 之间，负责：
+**Manager** 是 jsClaw 的任务编排层，位于用户和 Worker Agent 之间，负责：
 
 - 🧠 **智能判断**：分析任务类型，决定是直接回答还是需要工具
 - 🎯 **任务分发**：简单任务快速回答，复杂任务交给 Worker Agent
@@ -28,18 +28,18 @@ jsClaw 从另一个方向出发——**能跑起来的最小实现**。整个框
 ```
 用户任务
    ↓
-[Sheepy 判断]
+[Manager 判断]
    ├─ 简单任务 → [直接回答] → 最终结果
    └─ 复杂任务 → [生成执行指引] → [Worker Agent]
                                       ↓
                                  [执行工具]
                                       ↓
-                                 [Sheepy 评估] → 最终结果
+                                 [Manager 评估] → 最终结果
 ```
 
 ### 快速体验
 
-直接使用交互式命令行体验 Sheepy（需要 API Key）：
+直接使用交互式命令行体验 Manager（需要 API Key）：
 
 ```bash
 npm start
@@ -49,11 +49,11 @@ npm start
 
 ```js
 import { initLLM } from './src/llm.js';
-import { runSheepy } from './src/sheepy.js';
+import { runManager } from './src/manager.js';
 
 initLLM();
 
-const result = await runSheepy('读取当前目录下的文件并统计数量', {
+const result = await runManager('读取当前目录下的文件并统计数量', {
   verbose: true,  // 打印中间过程
 });
 
@@ -64,12 +64,85 @@ console.log(result.evaluation);   // 结果评估（评分 1-5）
 
 ### 优势
 
-✅ **减少重复判断** - Sheepy 和 Worker Agent 不再重复分析任务  
+✅ **减少重复判断** - Manager 和 Worker Agent 不再重复分析任务  
 ✅ **降低 Token 消耗** - 只传递相关工具给 Worker Agent  
-✅ **紧密协作** - Sheepy 的判断结果被充分利用  
+✅ **紧密协作** - Manager 的判断结果被充分利用  
 ✅ **向后兼容** - 保留 `runAgentWithThink()` 接口，现有代码无需改动
 
-详见 [SHEEPY.md](./SHEEPY.md) 和 [REFACTORING.md](./REFACTORING.md)
+详见 [MANAGER.md](./MANAGER.md) 和 [REFACTORING.md](./REFACTORING.md)
+
+---
+
+## 🏠 Team —— 协作团队
+
+**Team** 是 jsClaw 的协作层，支持持久化的团队协作，让多个 Members 配合完成复杂任务。
+
+### 核心概念
+
+1. **Team（团队）** - 持久化的工作环境，专门处理某一类任务
+2. **Member（成员）** - 具有特定技能组的 Agent
+3. **Leader（队长）** - Team 的编排者，负责：
+   - 在 Team 内：接收任务 → 组织 Members 执行 → 输出结果
+   - 在 Team 外：接收任务 → 决定自己完成或引导用户进入 Team
+
+### 工作流程
+
+```
+用户任务
+   ↓
+[Leader 决策]
+   ├─ Team 外简单任务 → [Leader 直接回答] → 最终结果
+   ├─ Team 外复杂任务 → [引导用户进入 Team]
+   └─ Team 内任务 → [Team Leader 组织 Members] → [Members 执行] → 最终结果
+```
+
+### 快速体验
+
+```bash
+# 运行 Team 系统演示
+npm run demo:team
+```
+
+### 编程方式使用
+
+```js
+import 'dotenv/config';
+import { initLLM } from './llm.js';
+import { TeamLab } from './TeamLab.js';
+
+// 初始化 LLM
+initLLM();
+
+// 创建 Team 系统
+const teamSystem = new TeamLab();
+await teamSystem.initialize();
+
+// Team 外提交任务（Leader 决策）
+const result = await teamSystem.submitTask('现在几点了？');
+// → Leader 自己完成，无需 Team
+
+const result2 = await teamSystem.submitTask('帮我分析项目代码结构');
+// → Leader 建议进入"开发团队"
+
+// 进入 Team
+await teamSystem.enterTeam('dev-team');
+
+// Team 内提交任务（Members 协作）
+const result3 = await teamSystem.submitTask('读取并分析 package.json');
+// → Team Leader 组织 Members 执行
+
+// 退出 Team
+await teamSystem.exitTeam();
+```
+
+### 优势
+
+✅ **任务分类更清晰** - 每个 Team 专注于特定领域（开发、研究、测试等）  
+✅ **资源利用更高效** - Team 外简单任务不启动 Members，复杂任务专门优化  
+✅ **协作更灵活** - 可多个 Team 并存，用户自由进入和退出  
+✅ **智能决策** - Leader 判断在哪里完成任务最合适  
+
+详见 [TEAM.md](./TEAM.md)
 
 ---
 
@@ -111,9 +184,9 @@ console.log(result);    // 最终答案
 npm start
 ```
 
-**Sheepy vs Worker Agent 的选择：**
+**Manager vs Worker Agent 的选择：**
 
-| 场景 | 使用 Sheepy | 直接使用 Worker Agent |
+| 场景 | 使用 Manager | 直接使用 Worker Agent |
 |------|-------------|---------------------|
 | 通用任务处理 | ✅ 推荐 | - |
 | 需要任务分类和评估 | ✅ 推荐 | - |
@@ -122,7 +195,7 @@ npm start
 | 完全自主控制 | ❌ 不推荐 | ✅ 推荐 |
 | 调试 Agent 行为 | - | ✅ 更直观 |
 
-**建议：日常使用推荐 Sheepy，调试时使用 Worker Agent。**
+**建议：日常使用推荐 Manager，调试时使用 Worker Agent。**
 
 ---
 
@@ -158,9 +231,15 @@ jsClaw/
 │   ├── index.js              # 命令行交互入口（REPL）
 │   ├── llm.js                # LLM 客户端封装，支持多 Provider
 │   ├── agent.js              # Worker Agent 核心（Think-Act 模式）
-│   ├── sheepy.js             # Sheepy 任务编排 Agent
+│   ├── manager.js            # Manager 任务编排 Agent
+│   ├── Team.js               # Team 类，持久化协作团队
+│   ├── Member.js             # Member 类，具有基础技能和角色技能的 Agent
+│   ├── TeamLeader.js         # Team 内的 Leader，任务编排和 Member 管理
+│   ├── TeamRegistry.js       # Team 注册和管理，处理 Team 进入/退出
+│   ├── TeamLab.js            # Team 实验室，加载配置和管理
 │   ├── skillRegistry.js      # Skill 注册和执行管理
 │   ├── marketplace.js        # Skill 市场（ClaWHub 官方 API）
+│   ├── TeamConfig.json       # Team 配置文件
 │   └── skills/
 │       ├── builtins.js       # 内置技能：read/write/list/exec/web_search/browser 等
 │       └── plugins/          # 从 ClaWHub 安装的 Skill
@@ -170,7 +249,8 @@ jsClaw/
 │               └── _meta.json
 ├── .env                      # 本地配置（不进 git）
 ├── .env.example              # 配置模板
-├── SHEEPY.md                 # Sheepy 使用文档
+├── MANAGER.md                # Manager 使用文档
+├── TEAM.md                   # Team 使用文档
 ├── REFACTORING.md            # 重构说明文档
 └── package.json
 ```
@@ -550,19 +630,19 @@ import './skills/mySkills.js';
 
 ## 以编程方式调用
 
-### 方式 1：使用 Sheepy（推荐）
+### 方式 1：使用 Manager（推荐）
 
-Sheepy 会自动判断任务类型，优化执行效率：
+Manager 会自动判断任务类型，优化执行效率：
 
 ```js
 import 'dotenv/config';
 import { initLLM } from './src/llm.js';
-import { runSheepy } from './src/sheepy.js';
+import { runManager } from './src/manager.js';
 import './src/skills/builtins.js';
 
 initLLM();
 
-const result = await runSheepy('帮我计算 3 的 10 次方');
+const result = await runManager('帮我计算 3 的 10 次方');
 console.log(result.finalResult);
 ```
 
@@ -592,12 +672,12 @@ Agent 会自动使用内置的系统提示词来指导 LLM 思考和调用 Skill
 const history = [];
 
 // 第一轮
-const r1 = await runSheepy('我叫小明', { history });
+const r1 = await runManager('我叫小明', { history });
 history.push({ role: 'user', content: '我叫小明' });
 history.push({ role: 'assistant', content: r1.finalResult });
 
 // 第二轮（LLM 记得上文）
-const r2 = await runSheepy('我叫什么名字？', { history });
+const r2 = await runManager('我叫什么名字？', { history });
 console.log(r2.finalResult); // → 你叫小明
 ```
 
@@ -622,10 +702,10 @@ console.log('📊 最终结果：', result);
   - `results`：该步骤执行的结果
 - `result`：最终答案文本
 
-### Sheepy 返回值说明
+### Manager 返回值说明
 
 ```js
-const result = await runSheepy('任务内容', { verbose: true });
+const result = await runManager('任务内容', { verbose: true });
 
 // 判断决策
 console.log(result.decision);     // 判断文本
@@ -645,11 +725,59 @@ console.log(result.finalResult);  // 最终答案
 
 ---
 
+## Team 配置
+
+在 `src/TeamConfig.json` 中定义 Teams：
+
+```json
+{
+  "teams": {
+    "dev-team": {
+      "id": "dev-team",
+      "name": "开发团队",
+      "description": "用于代码开发、文件操作和系统命令执行",
+      "members": [
+        {
+          "id": "dev-member-1",
+          "role": "developer",
+          "skills": ["code-analysis", "file-editing"]
+        }
+      ]
+    },
+    "research-team": {
+      "id": "research-team",
+      "name": "研究团队",
+      "description": "用于信息收集、数据分析和内容总结",
+      "members": [
+        {
+          "id": "research-member-1",
+          "role": "researcher",
+          "skills": ["data-analysis", "web-scraping"]
+        }
+      ]
+    }
+  }
+}
+```
+
+### npm 命令
+```bash
+npm start               # 启动 Agent
+npm run demo:team       # 运行 Team 系统演示
+npm run skill:list      # 浏览 Skill 市场
+npm run skill:install -- <name>   # 安装 Skill
+npm run skill:remove  -- <name>   # 卸载 Skill
+npm run skill:installed           # 查看已安装
+```
+
+---
+
 ## 开发计划
 
 - [x] Think-Act 模式（思考 + 行动分离）
-- [x] Sheepy 任务编排 Agent
+- [x] Manager 任务编排 Agent
 - [x] 执行指引优化（减少 token 消耗）
+- [x] Team 协作系统
 - [ ] 流式输出支持（stream 模式）
 - [ ] Skill 异步并行执行
 - [ ] Web UI 界面
