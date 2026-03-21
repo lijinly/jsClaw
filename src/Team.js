@@ -2,14 +2,14 @@
 //  Team —— 持久化协作团队
 // ─────────────────────────────────────────────
 import { TeamLeader } from './TeamLeader.js';
-import { Member } from './Member.js';
+import { TeamMember } from './TeamMember.js';
 
 /**
  * Team 类 - 协作团队
  *
  * 职责：
  * - 管理 Team 的状态（激活/非激活）
- * - 管理 Team 中的 Members
+ * - 管理 Team 中的 TeamMembers
  * - 提供 Leader 接口给用户交互
  */
 export class Team {
@@ -17,6 +17,7 @@ export class Team {
     this.id = id;
     this.name = config.name || id;
     this.description = config.description || '';
+    this.config = config;  // 保存配置
     this.leader = null;
     this.members = [];
     this.isActive = false;
@@ -24,16 +25,16 @@ export class Team {
 
   /**
    * 初始化 Team
-   * 创建 Leader 和 Members
+   * 创建 Leader 和 TeamMembers
    */
   async initialize() {
     // 创建 Team 的 Leader
     this.leader = new TeamLeader(this);
 
-    // 根据配置创建 Members
-    if (this.config?.members) {
-      for (const memberConfig of this.config.members) {
-        const member = new Member(memberConfig.id, {
+    // 根据配置创建 TeamMembers
+    if (this.config?.teamMembers) {
+      for (const memberConfig of this.config.teamMembers) {
+        const member = new TeamMember(memberConfig.id, {
           role: memberConfig.role,
           skills: memberConfig.skills,
         });

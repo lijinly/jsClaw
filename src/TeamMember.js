@@ -1,18 +1,18 @@
 // ─────────────────────────────────────────────
-//  Member —— 具有特定技能的团队成员
+//  TeamMember —— 具有特定技能的团队成员
 // ─────────────────────────────────────────────
 import { runAgentWithThink } from './agent.js';
 import { getToolDefinitions } from './skillRegistry.js';
 
 /**
- * Member 类 - 具有特定技能的团队成员
+ * TeamMember 类 - 具有特定技能的团队成员
  *
  * 特点：
- * - 拥有系统基础技能（所有 Member 共享）
+ * - 拥有系统基础技能（所有 TeamMember 共享）
  * - 动态加载角色技能（根据创建时的角色配置）
  * - 可以独立执行任务
  */
-export class Member {
+export class TeamMember {
   constructor(id, roleConfig) {
     this.id = id;
     this.role = roleConfig.role;
@@ -30,7 +30,7 @@ export class Member {
 
   /**
    * 加载系统基础技能
-   * 所有 Member 共享的基础技能集
+   * 所有 TeamMember 共享的基础技能集
    */
   loadBaseSkills() {
     const tools = getToolDefinitions();
@@ -50,7 +50,7 @@ export class Member {
   }
 
   /**
-   * 获取 Member 的技能清单
+   * 获取 TeamMember 的技能清单
    */
   getSkillNames() {
     return this.allSkills;
@@ -65,18 +65,18 @@ export class Member {
 
   /**
    * 执行任务
-   * 使用 Member 的技能完成任务
+   * 使用 TeamMember 的技能完成任务
    */
   async execute(task, options = {}) {
     const { verbose = false, history = [] } = options;
 
     if (verbose) {
-      console.log(`\n🔧 [Member: ${this.role}] 执行任务`);
+      console.log(`\n🔧 [TeamMember: ${this.role}] 执行任务`);
       console.log(`   技能: ${this.allSkills.join(', ')}`);
     }
 
     // 使用基础 Agent 执行任务
-    // Member 本质上是一个有特定技能集的 Agent
+    // TeamMember 本质上是一个有特定技能集的 Agent
     const result = await runAgentWithThink(task, {
       history,
       verbose,
@@ -86,7 +86,7 @@ export class Member {
   }
 
   /**
-   * 获取 Member 信息
+   * 获取 TeamMember 信息
    */
   getInfo() {
     return {

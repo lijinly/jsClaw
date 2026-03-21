@@ -32,7 +32,7 @@ jsClaw 采用**三层协作架构**，从简单到复杂提供不同的能力：
    - 评估执行结果质量
 
 2. **Team（协作团队）** - 持久化协作系统
-   - 多个 Members 协作完成复杂任务
+   - 多个 TeamMembers 协作完成复杂任务
    - 智能任务路由：Team 内/Team 外自动切换
    - 每个专注特定领域（开发、研究、测试等）
    - 支持自由进入/退出 Team
@@ -192,9 +192,9 @@ const result2 = await teamSystem.submitTask('帮我分析项目代码结构');
 // 进入 Team
 await teamSystem.enterTeam('dev-team');
 
-// Team 内提交任务（Members 协作）
+// Team 内提交任务（TeamMembers 协作）
 const result3 = await teamSystem.submitTask('读取并分析 package.json');
-// → Team Leader 组织 Members 执行
+// → Team Leader 组织 TeamMembers 执行
 
 // 退出 Team
 await teamSystem.exitTeam();
@@ -211,7 +211,7 @@ await teamSystem.exitTeam();
       "id": "dev-team",
       "name": "开发团队",
       "description": "用于代码开发、文件操作和系统命令执行",
-      "members": [
+      "teamMembers": [
         {
           "id": "dev-member-1",
           "role": "developer",
@@ -223,7 +223,7 @@ await teamSystem.exitTeam();
       "id": "research-team",
       "name": "研究团队",
       "description": "用于信息收集、数据分析和内容总结",
-      "members": [
+      "teamMembers": [
         {
           "id": "research-member-1",
           "role": "researcher",
@@ -329,9 +329,9 @@ console.log('📊 最终结果：', result);
 **核心概念：**
 
 1. **Team（团队）** - 持久化的工作环境，专门处理某一类任务
-2. **Member（成员）** - 具有特定技能组的 Agent
+2. **TeamMember（成员）** - 具有特定技能组的 Agent
 3. **Leader（队长）** - Team 的编排者，负责：
-   - 在 Team 内：接收任务 → 组织 Members 执行 → 输出结果
+   - 在 Team 内：接收任务 → 组织 TeamMembers 执行 → 输出结果
    - 在 Team 外：接收任务 → 决定自己完成或引导用户进入 Team
 
 **工作流程：**
@@ -341,12 +341,12 @@ console.log('📊 最终结果：', result);
 [Leader 决策]
    ├─ Team 外简单任务 → [Leader 直接回答] → 最终结果
    ├─ Team 外复杂任务 → [引导用户进入 Team]
-   └─ Team 内任务 → [Team Leader 组织 Members] → [Members 执行] → 最终结果
+   └─ Team 内任务 → [Team Leader 组织 TeamMembers] → [TeamMembers 执行] → 最终结果
 ```
 
 **优势：**
 - ✅ 任务分类更清晰 - 每个 Team 专注于特定领域
-- ✅ 资源利用更高效 - Team 外简单任务不启动 Members
+- ✅ 资源利用更高效 - Team 外简单任务不启动 TeamMembers
 - ✅ 协作更灵活 - 可多个 Team 并存，用户自由进入和退出
 - ✅ 智能决策 - Leader 判断在哪里完成任务最合适
 
@@ -385,8 +385,8 @@ jsClaw/
 │   ├── agent.js              # Worker Agent 核心（Think-Act 模式）
 │   ├── manager.js            # Manager 任务编排 Agent
 │   ├── Team.js               # Team 类，持久化协作团队
-│   ├── Member.js             # Member 类，具有基础技能和角色技能的 Agent
-│   ├── TeamLeader.js         # Team 内的 Leader，任务编排和 Member 管理
+│   ├── TeamMember.js         # TeamMember 类，具有基础技能和角色技能的 Agent
+│   ├── TeamLeader.js         # Team 内的 Leader，任务编排和 TeamMember 管理
 │   ├── TeamRegistry.js       # Team 注册和管理，处理 Team 进入/退出
 │   ├── TeamLab.js            # Team 实验室，加载配置和管理
 │   ├── skillRegistry.js      # Skill 注册和执行管理
