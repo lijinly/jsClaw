@@ -10,12 +10,17 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // 工作区根目录（从环境变量或当前目录推断）
-const WORKSPACE_ROOT = process.env.WORKSPACE_ROOT || path.join(__dirname, '..');
+// __dirname = src/skills，往上两级才是项目根
+const WORKSPACE_ROOT = process.env.WORKSPACE_ROOT || path.join(__dirname, '..', '..');
 
 // 安全路径解析，防止路径穿越攻击
+// 相对路径以 WORKSPACE_ROOT 为基准，绝对路径直接验证
 function resolveSafePath(userPath) {
-  const resolved = path.resolve(userPath);
   const root = path.resolve(WORKSPACE_ROOT);
+  // 相对路径 → 基于 WORKSPACE_ROOT 解析
+  const resolved = path.isAbsolute(userPath)
+    ? path.resolve(userPath)
+    : path.resolve(root, userPath);
   if (!resolved.startsWith(root)) {
     throw new Error(`路径超出工作区范围：${userPath}`);
   }
@@ -78,7 +83,190 @@ registerSkill({
   },
 });
 
-// ③ 网络搜索 —— 使用 open-websearch
+// ③ 列出目录内容
+registerSkill({
+  name: 'list',
+  description: '列出指定目录下的文件和子目录。支持递归列出、过滤隐藏文件。',
+  parameters: {
+    type: 'object',
+    properties: {
+      path: { type: 'string', description: '目录路径，相对于工作区根目录，默认为根目录 "."' },
+      recursive: { type: 'boolean', description: '是否递归列出子目录（默认 false）' },
+      showHidden: { type: 'boolean', description: '是否显示隐藏文件（以 . 开头，默认 false）' },
+    },
+  },
+  async execute({ path: userPath = '.', recursive = false, showHidden = false }) {
+    const dirPath = resolveSafePath(userPath);
+    if (!fs.existsSync(dirPath)) throw new Error(`路径不存在：${userPath}`);
+
+    const stat = fs.statSync(dirPath);
+    if (!stat.isDirectory()) throw new Error(`路径不是目录：${userPath}`);
+
+    function walk(dir, prefix = '', depth = 0) {
+      if (depth > 10) return []; // 防止无限递归
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      const lines = [];
+      for (const entry of entries) {
+        if (!showHidden && entry.name.startsWith('.')) continue;
+        const isDir = entry.isDirectory();
+        lines.push(`${prefix}${isDir ? '📁' : '📄'} ${entry.name}${isDir ? '/' : ''}`);
+        if (recursive && isDir) {
+          lines.push(...walk(path.join(dir, entry.name), prefix + '  ', depth + 1));
+        }
+      }
+      return lines;
+    }
+
+    const lines = walk(dirPath);
+    if (lines.length === 0) return `目录为空：${userPath}`;
+    return `📂 ${userPath}\n${lines.join('\n')}`;
+  },
+});
+
+// ④ 局部编辑文件（精准替换，不重写整文件）
+registerSkill({
+  name: 'edit',
+  description: '精准替换文件中的指定内容。找到 old_str 并替换为 new_str，比重写整个文件更安全高效。old_str 必须在文件中唯一存在。',
+  parameters: {
+    type: 'object',
+    properties: {
+      path:    { type: 'string', description: '要编辑的文件路径，相对于工作区根目录' },
+      old_str: { type: 'string', description: '要被替换的原始字符串（必须在文件中唯一存在）' },
+      new_str: { type: 'string', description: '替换后的新字符串（可为空字符串以实现删除效果）' },
+    },
+    required: ['path', 'old_str', 'new_str'],
+  },
+  async execute({ path: userPath, old_str, new_str }) {
+    const safePath = resolveSafePath(userPath);
+    if (!fs.existsSync(safePath)) throw new Error(`文件不存在：${userPath}`);
+
+    const content = fs.readFileSync(safePath, 'utf-8');
+
+    // 检查 old_str 是否存在
+    const count = content.split(old_str).length - 1;
+    if (count === 0) throw new Error(`未找到要替换的内容。请确认 old_str 是否正确。`);
+    if (count > 1)  throw new Error(`找到 ${count} 处匹配，old_str 不唯一，请提供更多上下文以精确定位。`);
+
+    const updated = content.replace(old_str, new_str);
+    fs.writeFileSync(safePath, updated, 'utf-8');
+
+    const action = new_str === '' ? '已删除' : '已替换';
+    return `✅ ${action}（${userPath}）`;
+  },
+});
+
+// ⑤ 应用 unified diff 格式的补丁（批量多文件修改）
+registerSkill({
+  name: 'apply_patch',
+  description: '应用 unified diff 格式的补丁，支持同时修改多个文件。适合批量代码重构、跨文件修改。补丁格式：--- a/file \\n+++ b/file \\n @@ ... @@',
+  parameters: {
+    type: 'object',
+    properties: {
+      patch: { type: 'string', description: 'unified diff 格式的补丁内容' },
+    },
+    required: ['patch'],
+  },
+  async execute({ patch }) {
+    // 解析 unified diff，支持多文件
+    const results = [];
+    const fileBlocks = patch.split(/^(?=--- )/m).filter(Boolean);
+
+    if (fileBlocks.length === 0) throw new Error('无法解析补丁内容，请确认是 unified diff 格式');
+
+    for (const block of fileBlocks) {
+      const lines = block.split('\n');
+
+      // 解析文件名（--- a/path 或 --- path）
+      const fromLine = lines.find(l => l.startsWith('--- '));
+      const toLine   = lines.find(l => l.startsWith('+++ '));
+      if (!fromLine || !toLine) continue;
+
+      // 提取路径（去掉 a/ b/ 前缀）
+      const filePath = toLine.slice(4).trim().replace(/^[ab]\//, '');
+      if (!filePath || filePath === '/dev/null') continue;
+
+      const safePath = resolveSafePath(filePath);
+
+      // 读取原文件（新文件则为空）
+      let original = '';
+      if (fs.existsSync(safePath)) {
+        original = fs.readFileSync(safePath, 'utf-8');
+      }
+
+      // 应用 hunks
+      let updated = original;
+      const hunks = block.split(/^@@ .+ @@.*$/m).slice(1);
+      const hunkHeaders = [...block.matchAll(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/gm)];
+
+      if (hunks.length === 0) {
+        results.push(`⚠️  ${filePath}：未找到有效 hunk`);
+        continue;
+      }
+
+      // 逐行应用补丁（简化实现：基于上下文行定位）
+      const originalLines = original.split('\n');
+      let outputLines = [...originalLines];
+      let offset = 0; // 因插入/删除导致的行号偏移
+
+      for (let i = 0; i < hunks.length; i++) {
+        const hunk = hunks[i];
+        const header = hunkHeaders[i];
+        if (!header) continue;
+
+        const startLine = parseInt(header[1], 10) - 1; // 转为 0-indexed
+        const hunkLines = hunk.split('\n').filter((_, idx) => idx > 0 || hunk.startsWith('\n') ? true : true);
+
+        const removals = [];
+        const additions = [];
+        const context = [];
+
+        let lineIdx = startLine + offset;
+
+        for (const hl of hunkLines) {
+          if (hl.startsWith('-')) {
+            removals.push(hl.slice(1));
+          } else if (hl.startsWith('+')) {
+            additions.push(hl.slice(1));
+          } else if (hl.startsWith(' ')) {
+            context.push(hl.slice(1));
+          }
+        }
+
+        // 在 outputLines 中找到 removal 块的位置（通过上下文匹配）
+        const removalBlock = removals.join('\n');
+        const outputText = outputLines.join('\n');
+
+        if (removalBlock && outputText.includes(removalBlock)) {
+          // 替换 removal 为 addition
+          const newText = outputText.replace(removalBlock, additions.join('\n'));
+          outputLines = newText.split('\n');
+          offset += additions.length - removals.length;
+        } else if (removals.length === 0 && additions.length > 0) {
+          // 纯新增：在 context 后插入
+          const insertAfter = context[context.length - 1] || '';
+          const insertIdx = outputLines.findIndex(l => l === insertAfter);
+          if (insertIdx >= 0) {
+            outputLines.splice(insertIdx + 1, 0, ...additions);
+            offset += additions.length;
+          } else {
+            outputLines.push(...additions);
+          }
+        }
+      }
+
+      // 写回文件
+      const dir = path.dirname(safePath);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(safePath, outputLines.join('\n'), 'utf-8');
+      results.push(`✅ ${filePath}（${hunks.length} 个 hunk 已应用）`);
+    }
+
+    if (results.length === 0) return '⚠️  未找到可应用的文件变更';
+    return results.join('\n');
+  },
+});
+
+// ⑥ 网络搜索 —— 使用 open-websearch
 // 多搜索引擎支持：Bing、DuckDuckGo、Baidu、CSDN、Brave、Exa、Juejin 等
 import { searchBing } from 'open-websearch/build/engines/bing/bing.js';
 import { searchDuckDuckGo } from 'open-websearch/build/engines/duckduckgo/index.js';
@@ -152,7 +340,7 @@ registerSkill({
   },
 });
 
-// ④ 执行 shell 命令
+// ⑦ 执行 shell 命令
 import { execSync } from 'child_process';
 
 registerSkill({
@@ -193,7 +381,7 @@ registerSkill({
   },
 });
 
-// ⑤ 抓取网页内容（HTML → Markdown）
+// ⑧ 抓取网页内容（HTML → Markdown）
 import https from 'https';
 
 // 企业网络/代理环境下可能存在 SSL 证书验证问题，提供可配置的绕过选项
@@ -322,7 +510,7 @@ function getSkillDir(slug) {
   return path.join(PLUGINS_DIR, slug);
 }
 
-// ⑥ 列出已安装的 Skill（懒加载入口）
+// ⑨ 列出已安装的 Skill（懒加载入口）
 registerSkill({
   name: 'list_skills',
   description: '列出所有已安装的 ClaWHub Skill（仅返回名称和描述）。当你不知道有哪些 Skill 可用时，先调用此工具。',
@@ -344,7 +532,7 @@ registerSkill({
   },
 });
 
-// ⑦ 读取指定 Skill 的 SKILL.md（按需加载）
+// ⑩ 读取指定 Skill 的 SKILL.md（按需加载）
 registerSkill({
   name: 'read_skill',
   description: '读取已安装 Skill 的完整说明文档（SKILL.md）。当你需要了解某个 Skill 的具体使用方法时，先调用 list_skills 查看有哪些 Skill，然后调用此工具读取具体的 SKILL.md。',
