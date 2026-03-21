@@ -6,7 +6,6 @@
   "type": "module",
   "scripts": {
     "start": "node src/index.js",
-    "demo": "node src/demo.js",
     "demo:think-act": "node src/demo-think-act.js",
     "demo:sheepy": "node src/demo-sheepy.js",
     "skill:list": "node src/marketplace.js list",

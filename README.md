@@ -155,7 +155,6 @@ npm run demo:think-act
 jsClaw/
 ├── src/
 │   ├── index.js              # 命令行交互入口（REPL）
-│   ├── demo.js               # 本地 Skill 演示，不需要 API Key
 │   ├── demo-think-act.js     # Think-Act 模式演示（需要 API Key）
 │   ├── demo-sheepy.js        # Sheepy 任务编排演示（需要 API Key）
 │   ├── llm.js                # LLM 客户端封装，支持多 Provider
@@ -239,9 +238,6 @@ node diagnose-api.js
 ```bash
 # 启动交互式对话（需要 API Key）
 npm start
-
-# 本地 Skill 功能演示（不需要 API Key）
-npm run demo
 
 # Worker Agent - Think-Act 模式演示（需要 API Key）
 npm run demo:think-act
