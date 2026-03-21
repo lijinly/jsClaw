@@ -492,6 +492,58 @@ function htmlToMarkdown(html) {
     .trim();
 }
 
+// ⑨ 发送消息通知（企业微信 Webhook）
+registerSkill({
+  name: 'message',
+  description: '发送消息到企业微信群聊机器人。适合通知、告警、任务完成提醒等场景。',
+  parameters: {
+    type: 'object',
+    properties: {
+      webhookUrl: { type: 'string', description: '企业微信群机器人 Webhook URL（key 之后的完整 URL）' },
+      content: { type: 'string', description: '要发送的消息内容（支持 Markdown 格式，企业微信仅支持部分 Markdown 语法）' },
+      mentioned_list: { type: 'array', description: '可选：要 @ 的用户手机号列表（不传则不 @）', items: { type: 'string' } },
+    },
+    required: ['webhookUrl', 'content'],
+  },
+  async execute({ webhookUrl, content, mentioned_list = [] }) {
+    try {
+      console.log(`[message] 发送消息到企业微信`);
+
+      // 企业微信 Webhook API 格式
+      const body = {
+        msgtype: 'markdown',
+        markdown: {
+          content,
+        },
+      };
+
+      // 如果有 @ 用户，添加 mentioned_list
+      if (mentioned_list.length > 0) {
+        body.markdown.mentioned_list = mentioned_list;
+      }
+
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(10000),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || result.errcode !== 0) {
+        return `发送失败：${result.errmsg || response.statusText}（errcode: ${result.errcode || response.status}）`;
+      }
+
+      return '✅ 消息已发送';
+    } catch (err) {
+      return `发送失败：${err.message}`;
+    }
+  },
+});
+
 // ── ClaWHub Skill 懒加载工具 ─────────────────────
 
 const PLUGINS_DIR = path.join(__dirname, '..', 'skills', 'plugins');
@@ -510,7 +562,7 @@ function getSkillDir(slug) {
   return path.join(PLUGINS_DIR, slug);
 }
 
-// ⑨ 列出已安装的 Skill（懒加载入口）
+// ⑩ 列出已安装的 Skill（懒加载入口）
 registerSkill({
   name: 'list_skills',
   description: '列出所有已安装的 ClaWHub Skill（仅返回名称和描述）。当你不知道有哪些 Skill 可用时，先调用此工具。',
@@ -532,7 +584,7 @@ registerSkill({
   },
 });
 
-// ⑩ 读取指定 Skill 的 SKILL.md（按需加载）
+// ⑪ 读取指定 Skill 的 SKILL.md（按需加载）
 registerSkill({
   name: 'read_skill',
   description: '读取已安装 Skill 的完整说明文档（SKILL.md）。当你需要了解某个 Skill 的具体使用方法时，先调用 list_skills 查看有哪些 Skill，然后调用此工具读取具体的 SKILL.md。',
