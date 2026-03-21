@@ -121,40 +121,43 @@ Agent: (128 + 256) × 0.75 = 288
 
 ## 📚 使用方式
 
-### 方式 1：使用 Agent 类（推荐）
+### 方式 2：使用 WorkSpace（推荐用于 Team 协作）
 
-**适用场景**：通用任务处理、需要扩展和定制
-
-**适用场景**：复杂多步任务、需要多个专业 Agents 协作
+**适用场景**：复杂多步任务、需要多个专业 TeamMembers 协作
 
 ```js
 import 'dotenv/config';
 import { initLLM } from './src/llm.js';
-import { TeamLab } from './src/TeamLab.js';
+import { WorkSpace } from './src/WorkSpace.js';
 
 // 初始化 LLM
 initLLM();
 
-// 创建 Team 系统
-const teamSystem = new TeamLab();
-await teamSystem.initialize();
+// 创建 WorkSpace
+const workspace = new WorkSpace();
+await workspace.initialize();
 
-// Team 外提交任务（Leader 决策）
-const result = await teamSystem.submitTask('现在几点了？');
-// → Leader 自己完成，无需 Team
+// 场景 1: 不带 teamId 的任务（交给 Agent）
+const result1 = await workspace.submitTask('现在几点了？');
+console.log(result1.executor); // 'Agent'
+console.log(result1.result);   // 执行结果
 
-const result2 = await teamSystem.submitTask('帮我分析项目代码结构');
-// → Leader 建议进入"开发团队"
+// 场景 2: 带 teamId 的任务（交给指定 Team）
+const result2 = await workspace.submitTask({
+  description: '帮我列出当前目录的文件',
+  teamId: 'dev-team',
+});
+console.log(result2.executor); // 'Team'
+console.log(result2.executorName); // '开发团队'
+console.log(result2.result);   // 执行结果
 
-// 进入 Team
-await teamSystem.enterTeam('dev-team');
-
-// Team 内提交任务（TeamMembers 协作）
-const result3 = await teamSystem.submitTask('读取并分析 package.json');
-// → Team Leader 组织 TeamMembers 执行
+// 场景 3: 进入 Team 后提交任务
+await workspace.enterTeam('dev-team');
+const result3 = await workspace.submitTask('分析项目结构');
+console.log(result3.result);
 
 // 退出 Team
-await teamSystem.exitTeam();
+await workspace.exitTeam();
 ```
 
 #### Team 配置
@@ -190,12 +193,6 @@ await teamSystem.exitTeam();
     }
   }
 }
-```
-
-#### 快速体验 Team
-
-```bash
-npm run demo:team
 ```
 
 ### 方式 3：使用 Agent 类（面向对象，高级定制）
@@ -288,12 +285,6 @@ const articleResult = await writer.run(
 );
 ```
 
-**快速体验 Agent 类：**
-
-```bash
-npm run demo:agent
-```
-
 📖 **完整文档**：查看 [AGENT_OO_REFACTORING.md](./AGENT_OO_REFACTORING.md) 了解面向对象设计的详细信息。
 
 ### 方式 4：使用函数式接口（向后兼容）
@@ -350,18 +341,18 @@ console.log('📊 最终结果：', result);
 ```
 用户任务
    ↓
-[TeamLab 决策]
-   ├─ Team 外任务 → [Agent 完成]
-   └─ Team 内任务 → [Team Leader 组织 TeamMembers] → [TeamMembers 执行] → 最终结果
+[WorkSpace 路由]
+   ├─ 没有 teamId → [Agent 完成]
+   └─ 有 teamId    → [Team Leader 组织 TeamMembers] → [TeamMembers 执行] → 最终结果
 ```
 
 **优势：**
 - ✅ 任务分类更清晰 - 每个 Team 专注于特定领域
-- ✅ 资源利用更高效 - Team 外简单任务直接用 Agent 完成
+- ✅ 资源利用更高效 - 不带 teamId 的简单任务直接用 Agent 完成
 - ✅ 协作更灵活 - 可多个 Team 并存，用户自由进入和退出
-- ✅ 智能路由 - 自动判断是否需要进入 Team
+- ✅ 显式路由 - 通过 teamId 显式指定执行者，更可控
 
-详见 [TEAM.md](./TEAM.md)
+详见 [WORKSPACE.md](./WORKSPACE.md) 和 [TEAM.md](./TEAM.md)
 
 ---
 
@@ -398,11 +389,9 @@ jsClaw/
 │   ├── TeamMember.js         # TeamMember 类，具有基础技能和角色技能的 Agent
 │   ├── TeamLeader.js         # Team 内的 Leader，任务编排和 TeamMember 管理
 │   ├── TeamRegistry.js       # Team 注册和管理，处理 Team 进入/退出
-│   ├── TeamLab.js            # Team 实验室，加载配置和管理
+│   ├── WorkSpace.js          # 工作空间，统一入口和任务路由
 │   ├── skillRegistry.js      # Skill 注册和执行管理
 │   ├── marketplace.js        # Skill 市场（ClaWHub 官方 API）
-│   ├── demo-agent.js         # Agent 类使用示例
-│   ├── test-agent.js         # Agent 类测试
 │   ├── TeamConfig.json       # Team 配置文件
 │   └── skills/
 │       ├── builtins.js       # 内置技能：read/write/list/exec/web_search/browser 等
@@ -414,6 +403,7 @@ jsClaw/
 ├── .env                      # 本地配置（不进 git）
 ├── .env.example              # 配置模板
 ├── TEAM.md                   # Team 使用文档
+├── WORKSPACE.md              # WorkSpace 使用文档
 ├── AGENT_OO_REFACTORING.md   # Agent 面向对象重构文档
 ├── GIT_UTF8_CONFIG.md        # Git 中文编码配置指南
 └── package.json
@@ -648,8 +638,6 @@ import './skills/mySkills.js';
 
 ```bash
 npm start               # 启动 Agent
-npm run demo:team       # 运行 Team 系统演示
-npm run demo:agent      # 运行 Agent 类演示
 npm run skill:list      # 浏览 Skill 市场
 npm run skill:install -- <name>   # 安装 Skill
 npm run skill:remove  -- <name>   # 卸载 Skill
@@ -694,6 +682,7 @@ npm run skill:installed           # 查看已安装
 
 ## 📖 详细文档
 
+- [WORKSPACE.md](./WORKSPACE.md) - WorkSpace 使用文档
 - [TEAM.md](./TEAM.md) - Team 使用文档
 - [AGENT_OO_REFACTORING.md](./AGENT_OO_REFACTORING.md) - Agent 面向对象重构文档
 - [API_KEY_SETUP_GUIDE.md](./API_KEY_SETUP_GUIDE.md) - API Key 配置指南
