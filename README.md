@@ -14,7 +14,65 @@ jsClaw 从另一个方向出发——**能跑起来的最小实现**。整个框
 
 ---
 
-## Think-Act 模式
+## 🆕 Sheepy —— 智能任务编排 Agent
+
+**Sheepy** 是 jsClaw 的任务编排层，位于用户和 Worker Agent 之间，负责：
+
+- 🧠 **智能判断**：分析任务类型，决定是直接回答还是需要工具
+- 🎯 **任务分发**：简单任务快速回答，复杂任务交给 Worker Agent
+- 📋 **执行指引**：为复杂任务提供关键需求、建议工具、执行步骤
+- 📊 **结果评估**：评估执行结果的完整性、准确性、实用性
+
+### 工作流程
+
+```
+用户任务
+   ↓
+[Sheepy 判断]
+   ├─ 简单任务 → [直接回答] → 最终结果
+   └─ 复杂任务 → [生成执行指引] → [Worker Agent]
+                                      ↓
+                                 [执行工具]
+                                      ↓
+                                 [Sheepy 评估] → 最终结果
+```
+
+### 快速体验
+
+```bash
+# 运行 Sheepy 演示（需要 API Key）
+npm run demo:sheepy
+```
+
+### 编程方式使用
+
+```js
+import { initLLM } from './src/llm.js';
+import { runSheepy } from './src/sheepy.js';
+
+initLLM();
+
+const result = await runSheepy('读取当前目录下的文件并统计数量', {
+  verbose: true,  // 打印中间过程
+});
+
+console.log(result.finalResult);  // 最终答案
+console.log(result.guidance);     // 执行指引（关键需求、建议工具、执行步骤）
+console.log(result.evaluation);   // 结果评估（评分 1-5）
+```
+
+### 优势
+
+✅ **减少重复判断** - Sheepy 和 Worker Agent 不再重复分析任务  
+✅ **降低 Token 消耗** - 只传递相关工具给 Worker Agent  
+✅ **紧密协作** - Sheepy 的判断结果被充分利用  
+✅ **向后兼容** - 保留 `runAgentWithThink()` 接口，现有代码无需改动
+
+详见 [SHEEPY.md](./SHEEPY.md) 和 [REFACTORING.md](./REFACTORING.md)
+
+---
+
+## Think-Act 模式（Worker Agent）
 
 jsClaw 采用 **Think-Act 模式**，分两个阶段处理：
 
@@ -52,6 +110,19 @@ console.log(result);    // 最终答案
 npm run demo:think-act
 ```
 
+**Sheepy vs Worker Agent 的选择：**
+
+| 场景 | 使用 Sheepy | 直接使用 Worker Agent |
+|------|-------------|---------------------|
+| 通用任务处理 | ✅ 推荐 | - |
+| 需要任务分类和评估 | ✅ 推荐 | - |
+| 简单任务（知识问答） | ✅ 自动优化 | ❌ 浪费资源 |
+| 复杂任务（工具调用） | ✅ 智能分发 | ✅ 可直接调用 |
+| 完全自主控制 | ❌ 不推荐 | ✅ 推荐 |
+| 调试 Agent 行为 | - | ✅ 更直观 |
+
+**建议：日常使用推荐 Sheepy，调试时使用 Worker Agent。**
+
 ---
 
 ## 核心概念
@@ -86,12 +157,14 @@ jsClaw/
 │   ├── index.js              # 命令行交互入口（REPL）
 │   ├── demo.js               # 本地 Skill 演示，不需要 API Key
 │   ├── demo-think-act.js     # Think-Act 模式演示（需要 API Key）
+│   ├── demo-sheepy.js        # Sheepy 任务编排演示（需要 API Key）
 │   ├── llm.js                # LLM 客户端封装，支持多 Provider
-│   ├── agent.js              # Agent 核心（Think-Act 模式）
+│   ├── agent.js              # Worker Agent 核心（Think-Act 模式）
+│   ├── sheepy.js             # Sheepy 任务编排 Agent
 │   ├── skillRegistry.js      # Skill 注册和执行管理
 │   ├── marketplace.js        # Skill 市场（ClaWHub 官方 API）
 │   └── skills/
-│       ├── builtins.js       # 内置技能：数学计算 / 当前时间 / 网络搜索
+│       ├── builtins.js       # 内置技能：read/write/list/exec/web_search/browser 等
 │       └── plugins/          # 从 ClaWHub 安装的 Skill
 │           ├── index.json    # 已安装 Skill 清单
 │           └── <slug>/       # 每个 Skill 一个目录
@@ -99,6 +172,8 @@ jsClaw/
 │               └── _meta.json
 ├── .env                      # 本地配置（不进 git）
 ├── .env.example              # 配置模板
+├── SHEEPY.md                 # Sheepy 使用文档
+├── REFACTORING.md            # 重构说明文档
 └── package.json
 ```
 
@@ -168,8 +243,11 @@ npm start
 # 本地 Skill 功能演示（不需要 API Key）
 npm run demo
 
-# Think-Act 模式演示（需要 API Key）
+# Worker Agent - Think-Act 模式演示（需要 API Key）
 npm run demo:think-act
+
+# Sheepy - 任务编排演示（推荐，需要 API Key）
+npm run demo:sheepy
 ```
 
 启动后示例：
@@ -229,7 +307,7 @@ jsClaw 预装了以下实用技能，开箱即用：
 | `web_search` | 多引擎实时网络搜索 | `query: string`, `engine?: string`, `limit?: number` |
 | `web_fetch` | 抓取网页内容（HTML → Markdown） | `url: string` |
 | `message` | 发送消息到企业微信群聊 | `webhookUrl: string`, `content: string`, `mentioned_list?: string[]` |
-| `browser` | 浏览器自动化（需先启动调试端口） | `action: string`, `url?/selector?/text?/script?` |
+| `browser` | 浏览器自动化（自动使用系统 Edge/Chrome，无需预先启动） | `action: string`, `url?/selector?/text?/script?` |
 | `list_skills` | 列出已安装的 Skill | 无 |
 | `read_skill` | 读取 Skill 详细说明 | `name: string` |
 
@@ -271,21 +349,16 @@ const result = await web_search({
 
 ### 🌍 Browser 详解
 
-**浏览器自动化**，基于 Playwright 实现页面操作、截图、点击、填表单等功能。
+**浏览器自动化**，基于 Puppeteer 实现，自动检测并使用系统浏览器（Chrome/Edge），无需预先启动。
 
-#### 使用前准备
+#### 优势
 
-1. 启动浏览器并开启调试端口：
+✅ **零配置** - 自动检测系统浏览器路径  
+✅ **无需手动启动** - 自动启动和管理浏览器实例  
+✅ **支持 Edge/Chrome** - 自动按优先级检测可用浏览器  
+✅ **Headless 模式** - 无需显示窗口，后台运行  
 
-```bash
-# Windows Chrome
-chrome.exe --remote-debugging-port=9222
-
-# Windows Edge
-msedge.exe --remote-debugging-port=9223
-```
-
-2. jsClaw 会自动连接到已启动的浏览器。
+#### 支持的操作
 
 #### 支持的操作
 
@@ -318,6 +391,9 @@ await browser({ action: 'fill', selector: 'input[name="username"]', text: 'testu
 
 // 执行脚本
 await browser({ action: 'evaluate', script: 'document.title' });
+
+// 关闭页面
+await browser({ action: 'close' });
 ```
 
 ### 🔍 Web Search 详解
@@ -485,7 +561,25 @@ import './skills/mySkills.js';
 
 ## 以编程方式调用
 
-直接引入 `runAgentWithThink` 集成到你自己的项目里：
+### 方式 1：使用 Sheepy（推荐）
+
+Sheepy 会自动判断任务类型，优化执行效率：
+
+```js
+import 'dotenv/config';
+import { initLLM } from './src/llm.js';
+import { runSheepy } from './src/sheepy.js';
+import './src/skills/builtins.js';
+
+initLLM();
+
+const result = await runSheepy('帮我计算 3 的 10 次方');
+console.log(result.finalResult);
+```
+
+### 方式 2：直接使用 Worker Agent
+
+完全自主控制 Worker Agent 的行为：
 
 ```js
 import 'dotenv/config';
@@ -509,13 +603,13 @@ Agent 会自动使用内置的系统提示词来指导 LLM 思考和调用 Skill
 const history = [];
 
 // 第一轮
-const r1 = await runAgentWithThink('我叫小明', { history });
+const r1 = await runSheepy('我叫小明', { history });
 history.push({ role: 'user', content: '我叫小明' });
-history.push({ role: 'assistant', content: r1.result });
+history.push({ role: 'assistant', content: r1.finalResult });
 
 // 第二轮（LLM 记得上文）
-const r2 = await runAgentWithThink('我叫什么名字？', { history });
-console.log(r2.result); // → 你叫小明
+const r2 = await runSheepy('我叫什么名字？', { history });
+console.log(r2.finalResult); // → 你叫小明
 ```
 
 **获取完整的执行过程（调试用）：**
@@ -539,11 +633,34 @@ console.log('📊 最终结果：', result);
   - `results`：该步骤执行的结果
 - `result`：最终答案文本
 
+### Sheepy 返回值说明
+
+```js
+const result = await runSheepy('任务内容', { verbose: true });
+
+// 判断决策
+console.log(result.decision);     // 判断文本
+console.log(result.needsAgent);   // 是否使用了 agent
+
+// 执行指引
+console.log(result.guidance.keyRequirements);  // 关键需求数组
+console.log(result.guidance.suggestedTools);  // 建议工具数组
+console.log(result.guidance.executionSteps);  // 执行步骤文本
+
+// 执行结果
+console.log(result.agentResult);  // Worker agent 的完整结果
+console.log(result.directAnswer); // 直接回答的内容
+console.log(result.evaluation);   // 结果评估（评分 1-5）
+console.log(result.finalResult);  // 最终答案
+```
+
 ---
 
 ## 开发计划
 
 - [x] Think-Act 模式（思考 + 行动分离）
+- [x] Sheepy 任务编排 Agent
+- [x] 执行指引优化（减少 token 消耗）
 - [ ] 流式输出支持（stream 模式）
 - [ ] Skill 异步并行执行
 - [ ] Web UI 界面

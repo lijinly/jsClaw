@@ -8,6 +8,7 @@
     "start": "node src/index.js",
     "demo": "node src/demo.js",
     "demo:think-act": "node src/demo-think-act.js",
+    "demo:sheepy": "node src/demo-sheepy.js",
     "skill:list": "node src/marketplace.js list",
     "skill:info": "node src/marketplace.js info",
     "skill:install": "node src/marketplace.js install",
