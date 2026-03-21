@@ -241,7 +241,105 @@ await teamSystem.exitTeam();
 npm run demo:team
 ```
 
-### 方式 3：直接使用 Worker Agent
+### 方式 3：使用 Agent 类（面向对象）
+
+**适用场景**：需要扩展、定制、多 Agent 协作
+
+```js
+import 'dotenv/config';
+import { initLLM } from './src/llm.js';
+import { Agent } from './src/agent.js';
+import './src/skills/builtins.js';
+
+initLLM();
+
+// 创建 Agent 实例
+const agent = new Agent({
+  name: '助手',
+  role: '智能助手',
+  verbose: true,
+  maxRounds: 5,
+});
+
+// 运行 Agent（无指引）
+const result = await agent.run('你好，请介绍一下你自己');
+console.log(result.result);
+
+// 运行 Agent（带指引）
+const result2 = await agent.runWithGuidance('统计当前目录文件', {
+  guidance: {
+    keyRequirements: ['获取文件列表', '准确计数'],
+    suggestedTools: ['exec'],
+    executionSteps: '使用 find 或 dir 命令',
+  },
+  systemPrompt: '你是文件操作助手',
+  history: [],
+});
+```
+
+**自定义 Agent 子类：**
+
+```js
+class FileAgent extends Agent {
+  constructor() {
+    super({
+      name: '文件专家',
+      role: '专业的文件管理助手',
+      verbose: true,
+      maxRounds: 3,
+    });
+  }
+
+  async run(userMessage, options = {}) {
+    // 添加自定义前置处理
+    console.log('🔍 开始分析任务...');
+    
+    const result = await super.run(userMessage, options);
+    
+    // 添加自定义后置处理
+    console.log('✅ 任务完成');
+    
+    return result;
+  }
+}
+
+const agent = new FileAgent();
+const result = await agent.run('列出当前目录文件');
+```
+
+**多 Agent 协作：**
+
+```js
+const researcher = new Agent({
+  name: '研究员',
+  role: '信息收集和分析助手',
+  maxRounds: 2,
+});
+
+const writer = new Agent({
+  name: '作者',
+  role: '内容创作助手',
+  maxRounds: 2,
+});
+
+// 研究阶段
+const researchResult = await researcher.run('什么是 JavaScript 闭包？');
+
+// 写作阶段
+const articleResult = await writer.run(
+  `基于以下内容写一篇文章：\n\n${researchResult.result}`
+);
+```
+
+**快速体验 Agent 类：**
+
+```bash
+npm run demo:agent
+```
+
+📖 **完整文档**：查看 [AGENT_OO_REFACTORING.md](./AGENT_OO_REFACTORING.md) 了解面向对象设计的详细信息。
+
+### 方式 4：直接使用 Worker Agent（函数式，兼容）
 
 **适用场景**：需要完全自主控制、调试 Agent 行为
 
@@ -382,7 +480,7 @@ jsClaw/
 ├── src/
 │   ├── index.js              # 命令行交互入口（REPL）
 │   ├── llm.js                # LLM 客户端封装，支持多 Provider
-│   ├── agent.js              # Worker Agent 核心（Think-Act 模式）
+│   ├── agent.js              # Agent 类（Think-Act 模式，面向对象）
 │   ├── manager.js            # Manager 任务编排 Agent
 │   ├── Team.js               # Team 类，持久化协作团队
 │   ├── TeamMember.js         # TeamMember 类，具有基础技能和角色技能的 Agent
@@ -391,6 +489,8 @@ jsClaw/
 │   ├── TeamLab.js            # Team 实验室，加载配置和管理
 │   ├── skillRegistry.js      # Skill 注册和执行管理
 │   ├── marketplace.js        # Skill 市场（ClaWHub 官方 API）
+│   ├── demo-agent.js         # Agent 类使用示例
+│   ├── test-agent.js         # Agent 类测试
 │   ├── TeamConfig.json       # Team 配置文件
 │   └── skills/
 │       ├── builtins.js       # 内置技能：read/write/list/exec/web_search/browser 等
@@ -403,7 +503,9 @@ jsClaw/
 ├── .env.example              # 配置模板
 ├── MANAGER.md                # Manager 使用文档
 ├── TEAM.md                   # Team 使用文档
-├── REFACTORING.md            # 重构说明文档
+├── AGENT_OO_REFACTORING.md   # Agent 面向对象重构文档
+├── REFACTORING.md            # Manager 重构说明文档
+├── GIT_UTF8_CONFIG.md        # Git 中文编码配置指南
 └── package.json
 ```
 
@@ -637,6 +739,7 @@ import './skills/mySkills.js';
 ```bash
 npm start               # 启动 Agent
 npm run demo:team       # 运行 Team 系统演示
+npm run demo:agent      # 运行 Agent 类演示
 npm run skill:list      # 浏览 Skill 市场
 npm run skill:install -- <name>   # 安装 Skill
 npm run skill:remove  -- <name>   # 卸载 Skill
@@ -645,22 +748,25 @@ npm run skill:installed           # 查看已安装
 
 ---
 
-## 💡 Manager vs Team vs Worker Agent 选择指南
+## 💡 Manager vs Team vs Agent 选择指南
 
-| 场景 | 使用 Manager | 使用 Team | 使用 Worker Agent |
-|------|-------------|----------|----------------|
+| 场景 | 使用 Manager | 使用 Team | 使用 Agent 类 |
+|------|-------------|----------|---------------|
 | 通用任务处理 | ✅ 推荐 | - | - |
 | 需要任务分类和评估 | ✅ 推荐 | - | - |
-| 复杂多步任务 | ✅ 推荐 | ✅ 推荐 | ✅ 可直接调用 |
-| 需要多个专业 Agents 协作 | - | ✅ 推荐 | - |
+| 复杂多步任务 | ✅ 推荐 | ✅ 推荐 | ✅ 推荐 |
+| 需要多个专业 Agents 协作 | - | ✅ 推荐 | ✅ 推荐 |
 | 简单任务（知识问答） | ✅ 自动优化 | ✅ 自动优化 | ❌ 浪费资源 |
 | 完全自主控制 | ❌ 不推荐 | ❌ 不推荐 | ✅ 推荐 |
 | 调试 Agent 行为 | - | - | ✅ 更直观 |
+| 需要扩展和定制 | - | - | ✅ 推荐 |
+| 多 Agent 协作 | - | ✅ 推荐 | ✅ 推荐 |
 
 **建议：**
 - 日常使用推荐 **Manager**
 - 复杂协作任务使用 **Team**
-- 调试时使用 **Worker Agent**
+- 需要扩展、定制或多 Agent 协作使用 **Agent 类**
+- 调试时使用 **Agent 类** 或 **Worker Agent（函数式）**
 
 ---
 
@@ -670,6 +776,7 @@ npm run skill:installed           # 查看已安装
 - [x] Manager 任务编排 Agent
 - [x] 执行指引优化（减少 token 消耗）
 - [x] Team 协作系统
+- [x] Agent 面向对象重构
 - [ ] 流式输出支持（stream 模式）
 - [ ] Skill 异步并行执行
 - [ ] Web UI 界面
@@ -681,8 +788,10 @@ npm run skill:installed           # 查看已安装
 
 - [MANAGER.md](./MANAGER.md) - Manager 使用文档
 - [TEAM.md](./TEAM.md) - Team 使用文档
-- [REFACTORING.md](./REFACTORING.md) - 重构说明文档
+- [AGENT_OO_REFACTORING.md](./AGENT_OO_REFACTORING.md) - Agent 面向对象重构文档
+- [REFACTORING.md](./REFACTORING.md) - Manager 重构说明文档
 - [API_KEY_SETUP_GUIDE.md](./API_KEY_SETUP_GUIDE.md) - API Key 配置指南
+- [GIT_UTF8_CONFIG.md](./GIT_UTF8_CONFIG.md) - Git 中文编码配置指南
 
 ---
 

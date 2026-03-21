@@ -11,7 +11,8 @@
     "skill:install": "node src/marketplace.js install",
     "skill:remove": "node src/marketplace.js remove",
     "skill:installed": "node src/marketplace.js installed",
-    "demo:team": "node src/demo-team.js"
+    "demo:team": "node src/demo-team.js",
+    "demo:agent": "node src/demo-agent.js"
   },
   "dependencies": {
     "adm-zip": "^0.5.16",
