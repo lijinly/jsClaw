@@ -1,6 +1,6 @@
 # jsClaw
 
-> 一个用 JavaScript 写的极简 Agent 框架，让大语言模型能够调用自定义技能（Skill）完成实际任务。
+> 基于 JavaScript 的双层 AI Agent 框架，支持 Team 协作、Think-Act 模式和可扩展的 Skill 生态系统，让大语言模型能够通过调用内置或自定义技能完成复杂任务。
 
 ---
 

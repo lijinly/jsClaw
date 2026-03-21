@@ -27,7 +27,7 @@
     "multi-task-team": {
       "id": "multi-task-team",
       "name": "综合团队",
-      "description": "综合多个 TeamMembers，处理复杂任务",
+      "description": "综合多个 Members，处理复杂任务",
       "members": [
         {
           "id": "dev-member-2",

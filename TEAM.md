@@ -1,94 +1,96 @@
-# Team —— 协作团队
+# Team 鈥斺€?鍗忎綔鍥㈤槦
 
-## 🏠 什么是 Team？
+## 馃彔 浠€涔堟槸 Team锛?
 
-Team 是一个持久化的协作团队，在这里可以常驻一组 TeamMember、一个 Leader 和你。
+Team 鏄竴涓寔涔呭寲鐨勫崗浣滃洟闃燂紝鍦ㄨ繖閲屽彲浠ュ父椹讳竴缁?Member銆佷竴涓?Leader 鍜屼綘銆?
 
-### Team 的核心概念
+### Team 鐨勬牳蹇冩蹇?
 
-1. **Team（团队）** - 持久化的工作环境，专门处理某一类任务
-2. **TeamMember（成员）** - 具有特定技能组的 Agent
-3. **Leader（队长）** - Team 的编排者，负责：
-   - 在 Team 内：接收任务 → 组织 TeamMembers 执行 → 输出结果
-   - 在 Team 外：接收任务 → 决定自己完成或引导用户进入 Team
+1. **Team锛堝洟闃燂級** - 鎸佷箙鍖栫殑宸ヤ綔鐜锛屼笓闂ㄥ鐞嗘煇涓€绫讳换鍔?
+2. **Member锛堟垚鍛橈級** - 鍏锋湁鐗瑰畾鎶€鑳界粍鐨?Agent
+3. **Leader锛堥槦闀匡級** - Team 鐨勭紪鎺掕€咃紝璐熻矗锛?
+   - 鍦?Team 鍐咃細鎺ユ敹浠诲姟 鈫?缁勭粐 Members 鎵ц 鈫?杈撳嚭缁撴灉
+   - 鍦?Team 澶栵細鎺ユ敹浠诲姟 鈫?鍐冲畾鑷繁瀹屾垚鎴栧紩瀵肩敤鎴疯繘鍏?Team
 
-### Team 的设计理念
+### Team 鐨勮璁＄悊蹇?
 
 ```
-传统模式：
-用户 → Leader → TeamMember
-（单一路径，所有任务都走同一套流程）
+浼犵粺妯″紡锛?
+鐢ㄦ埛 鈫?Leader 鈫?Member
+锛堝崟涓€璺緞锛屾墍鏈変换鍔￠兘璧板悓涓€濂楁祦绋嬶級
 
-Team 模式：
-用户
-  ├─→ Team 外任务 → Leader 决策
-  │                    ├─ 简单任务 → Leader 自己完成
-  │                    └─ 复杂任务 → 引导用户进入 Team
-  │
-  └─→ Team 内任务 → Team Leader 组织 TeamMembers → TeamMembers 执行
+WorkSpace 妯″紡锛?
+鐢ㄦ埛
+  鈹溾攢鈫?涓嶅甫 teamId 鐨勪换鍔?鈫?Agent 瀹屾垚
+  鈹?
+  鈹斺攢鈫?甯?teamId 鐨勪换鍔?鈫?Team 缁勭粐 Members 鈫?Members 鎵ц
 ```
 
-## 🎯 Team 的优势
+## 馃幆 Team 鐨勪紭鍔?
 
-### 1. **任务分类更清晰**
-- 每个 Team 专注于特定领域（开发、研究、测试等）
-- TeamMembers 在 Team 中有明确的职责分工
+### 1. **浠诲姟鍒嗙被鏇存竻鏅?*
+- 姣忎釜 Team 涓撴敞浜庣壒瀹氶鍩燂紙寮€鍙戙€佺爺绌躲€佹祴璇曠瓑锛?
+- Members 鍦?Team 涓湁鏄庣‘鐨勮亴璐ｅ垎宸?
 
-### 2. **资源利用更高效**
-- Team 外的简单任务：Leader 直接完成，不启动 TeamMembers
-- Team 内的复杂任务：专门优化的 TeamMembers 协作执行
+### 2. **璧勬簮鍒╃敤鏇撮珮鏁?*
+- 涓嶅甫 teamId 鐨勭畝鍗曚换鍔★細Agent 鐩存帴瀹屾垚
+- 甯?teamId 鐨勪换鍔★細涓撻棬浼樺寲鐨?Members 鍗忎綔鎵ц
 
-### 3. **协作更灵活**
-- 可以多个 Team 并存，针对不同任务类型
-- 用户可以自由进入和退出 Team
-- Leader 智能判断应该在哪里完成任务
+### 3. **鍗忎綔鏇寸伒娲?*
+- 鍙互澶氫釜 Team 骞跺瓨锛岄拡瀵逛笉鍚屼换鍔＄被鍨?
+- 鐢ㄦ埛鍙互鑷敱杩涘叆鍜岄€€鍑?Team
+- Leader 鏅鸿兘鍒ゆ柇搴旇鍦ㄥ摢閲屽畬鎴愪换鍔?
 
-## 📝 使用示例
+## 馃摑 浣跨敤绀轰緥
 
-### 基础用法
+### 鍩虹鐢ㄦ硶
 
 ```javascript
 import 'dotenv/config';
 import { initLLM } from './llm.js';
-import { TeamLab } from './TeamLab.js';
+import { WorkSpace } from './WorkSpace.js';
 
-// 初始化 LLM
+// 鍒濆鍖?LLM
 initLLM();
 
-// 创建 Team 系统
-const teamSystem = new TeamLab();
-await teamSystem.initialize();
+// 鍒涘缓 WorkSpace
+const workspace = new WorkSpace();
+await workspace.initialize();
 
-// Team 外提交任务（Leader 决策）
-const result = await teamSystem.submitTask('现在几点了？');
-// → Leader 自己完成，无需 Team
+// 涓嶅甫 teamId 鐨勪换鍔★紙浜ょ粰 Agent锛?
+const result1 = await workspace.submitTask('鐜板湪鍑犵偣浜嗭紵');
+console.log(result1.executor); // 'Agent'
 
-const result2 = await teamSystem.submitTask('帮我分析项目代码结构');
-// → Leader 建议进入"开发团队"
+// 甯?teamId 鐨勪换鍔★紙浜ょ粰鎸囧畾 Team锛?
+const result2 = await workspace.submitTask({
+  description: '甯垜鍒嗘瀽椤圭洰浠ｇ爜缁撴瀯',
+  teamId: 'dev-team',
+});
+console.log(result2.executor); // 'Team'
 
-// 进入 Team
-await teamSystem.enterTeam('dev-team');
+// 鎴栬繘鍏?Team 鍚庢彁浜?
+await workspace.enterTeam('dev-team');
 
-// Team 内提交任务（TeamMembers 协作）
-const result3 = await teamSystem.submitTask('读取并分析 package.json');
-// → Team Leader 组织 TeamMembers 执行
+// Team 鍐呮彁浜や换鍔★紙Members 鍗忎綔锛?
+const result3 = await workspace.submitTask('璇诲彇骞跺垎鏋?package.json');
+// 鈫?Team Leader 缁勭粐 Members 鎵ц
 
-// 退出 Team
-await teamSystem.exitTeam();
+// 閫€鍑?Team
+await workspace.exitTeam();
 ```
 
-### 自定义 Team 配置
+### 鑷畾涔?Team 閰嶇疆
 
-在 `src/TeamConfig.json` 中定义 Teams：
+鍦?`src/Config.json` 涓畾涔?Teams锛?
 
 ```json
 {
   "teams": {
     "my-team": {
       "id": "my-team",
-      "name": "我的团队",
-      "description": "用于特定任务",
-      "teamMembers": [
+      "name": "鎴戠殑鍥㈤槦",
+      "description": "鐢ㄤ簬鐗瑰畾浠诲姟",
+      "Members": [
         {
           "id": "member-1",
           "role": "developer",
@@ -100,118 +102,120 @@ await teamSystem.exitTeam();
 }
 ```
 
-## 🏗️ 架构设计
+## 馃彈锔?鏋舵瀯璁捐
 
-### 核心组件
-
-```
-TeamLab（系统入口）
-  │
-  ├─ TeamRegistry（Team 管理）
-  │    ├─ 管理所有 Teams
-  │    ├─ 处理 Team 进入/退出
-  │    └─ 查找和匹配 Team
-  │
-  ├─ Team（团队）
-  │    ├─ TeamLeader（Team 内的编排者）
-  │    │    ├─ handleTaskInTeam()
-  │    │    ├─ handleTaskOutsideTeam()
-  │    │    └─ 技能匹配器
-  │    │
-  │    └─ TeamMembers（执行者）
-  │         ├─ TeamMember-1（角色：developer）
-  │         ├─ TeamMember-2（角色：researcher）
-  │         └─ ...
-```
-
-### TeamMember 的技能体系
+### 鏍稿績缁勪欢
 
 ```
-TeamMember
-  │
-  ├─ 基础技能（系统内置，所有 TeamMember 共享）
-  │    ├─ read, write, list, edit
-  │    ├─ exec, web_search, web_fetch
-  │    └─ browser, message
-  │
-  └─ 角色技能（动态加载，根据 TeamMember 角色）
-       ├─ code-analysis（开发者 TeamMember）
-       ├─ data-analysis（研究者 TeamMember）
-       └─ ...
+WorkSpace锛堢郴缁熷叆鍙ｏ級
+  鈹?
+  鈹溾攢 Teams 绠＄悊
+  鈹?   鈹溾攢 teams Map 鈥?鎵€鏈?Teams 鐨勯泦鍚?
+  鈹?   鈹溾攢 currentTeamId 鈥?褰撳墠婵€娲荤殑 Team
+  鈹?   鈹溾攢 enterTeam() / exitTeam() 鈥?Team 杩涘叆/閫€鍑?
+  鈹?   鈹斺攢 createTeam() / destroyTeam() 鈥?Team 鐢熷懡鍛ㄦ湡
+  鈹?
+  鈹溾攢 浠诲姟璺敱
+  鈹?   鈹溾攢 submitTask(task) 鈥?缁熶竴浠诲姟鎻愪氦
+  鈹?   鈹溾攢 handleTaskWithAgent() 鈥?涓嶅甫 teamId 鈫?Agent
+  鈹?   鈹斺攢 handleTaskWithTeam() 鈥?甯?teamId 鈫?Team
+  鈹?
+  鈹斺攢 Team锛堝洟闃燂級
+  鈹?   鈹溾攢 submitTask() - 浠诲姟鎻愪氦鍜屽崗璋?
+  鈹?   鈹溾攢 analyzeTask() - 鍒嗘瀽浠诲姟闇€姹?
+  鈹?   鈹溾攢 selectMembers() - 閫夋嫨鍚堥€傜殑 Members
+  鈹?   鈹斺攢 Members锛堟墽琛岃€咃級
+  鈹?        鈹溾攢 Member-1锛堣鑹诧細developer锛?
+  鈹?        鈹溾攢 Member-2锛堣鑹诧細researcher锛?
+  鈹?        鈹斺攢 ...
 ```
 
-## 🔄 任务处理流程
-
-### 场景 1：Team 外简单任务
+### Member 鐨勬妧鑳戒綋绯?
 
 ```
-用户提交任务（Team 外）
-   ↓
-[TeamLeader 接收]
-   ↓
-分析任务：简单任务，无需特殊技能
-   ↓
-Leader 自己完成
-   ↓
-返回结果
+Member
+  鈹?
+  鈹溾攢 鍩虹鎶€鑳斤紙绯荤粺鍐呯疆锛屾墍鏈?Member 鍏变韩锛?
+  鈹?   鈹溾攢 read, write, list, edit
+  鈹?   鈹溾攢 exec, web_search, web_fetch
+  鈹?   鈹斺攢 browser, message
+  鈹?
+  鈹斺攢 瑙掕壊鎶€鑳斤紙鍔ㄦ€佸姞杞斤紝鏍规嵁 Member 瑙掕壊锛?
+       鈹溾攢 code-analysis锛堝紑鍙戣€?Member锛?
+       鈹溾攢 data-analysis锛堢爺绌惰€?Member锛?
+       鈹斺攢 ...
 ```
 
-### 场景 2：Team 外复杂任务
+## 馃攧 浠诲姟澶勭悊娴佺▼
+
+### 鍦烘櫙 1锛歍eam 澶栫畝鍗曚换鍔?
 
 ```
-用户提交任务（Team 外）
-   ↓
-[TeamLeader 接收]
-   ↓
-分析任务需求（需要：read, exec, code-analysis）
-   ↓
-技能匹配器：查找匹配的 Team
-   ↓
-找到"开发团队"（有 Developer TeamMember）
-   ↓
-引导用户："建议进入'开发团队'"
-   ↓
-用户选择：进入 Team
-   ↓
-切换到 Team 内处理流程
+鐢ㄦ埛鎻愪氦浠诲姟锛圱eam 澶栵級
+   鈫?
+[TeamLeader 鎺ユ敹]
+   鈫?
+鍒嗘瀽浠诲姟锛氱畝鍗曚换鍔★紝鏃犻渶鐗规畩鎶€鑳?
+   鈫?
+Leader 鑷繁瀹屾垚
+   鈫?
+杩斿洖缁撴灉
 ```
 
-### 场景 3：Team 内任务
+### 鍦烘櫙 2锛歐orkSpace 璺敱鍒?Team
 
 ```
-用户提交任务（Team 内）
-   ↓
-[TeamLeader 接收]
-   ↓
-分析任务需求
-   ↓
-选择合适的 TeamMember（或多个 TeamMembers 协作）
-   ↓
-TeamMembers 执行任务
-   ↓
-返回结果
+鐢ㄦ埛鎻愪氦浠诲姟锛堝甫 teamId锛?
+   鈫?
+[WorkSpace 鎺ユ敹]
+   鈫?
+浠诲姟璺敱锛氭湁 teamId 鈫?浜ょ粰鎸囧畾 Team
+   鈫?
+[Team.submitTask()]
+   鈫?
+鍒嗘瀽浠诲姟闇€姹傦紙闇€瑕侊細read, exec, code-analysis锛?
+   鈫?
+閫夋嫨鍚堥€傜殑 Members锛圖eveloper锛?
+   鈫?
+Member.execute()
+   鈫?
+杩斿洖缁撴灉
+```
 ```
 
-## 📦 相关文件
+### 鍦烘櫙 3锛歍eam 鍐呬换鍔?
 
-- `src/Team.js` - Team 核心实现
-- `src/TeamMember.js` - TeamMember 核心实现
-- `src/TeamLeader.js` - Team 内的 Leader
-- `src/TeamRegistry.js` - Team 注册和管理
-- `src/TeamLab.js` - Team 实验室
-- `src/TeamConfig.json` - Team 配置文件
-- `src/demo-team.js` - 演示示例
+```
+鐢ㄦ埛鎻愪氦浠诲姟锛圱eam 鍐咃級
+   鈫?
+[Team.submitTask()]
+   鈫?
+鍒嗘瀽浠诲姟闇€姹?
+   鈫?
+閫夋嫨鍚堥€傜殑 Member锛堟垨澶氫釜 Members 鍗忎綔锛?
+   鈫?
+Members 鎵ц浠诲姟
+   鈫?
+杩斿洖缁撴灉
+```
 
-## 🚀 运行演示
+## 馃摝 鐩稿叧鏂囦欢
+
+- `src/Team.js` - Team 鏍稿績瀹炵幇
+- `src/Member.js` - Member 鏍稿績瀹炵幇
+- `src/WorkSpace.js` - WorkSpace 宸ヤ綔绌洪棿锛堝寘鍚?Teams 绠＄悊锛?
+- `src/Config.json` - 配置文件
+
+## 馃殌 杩愯婕旂ず
 
 ```bash
-# 运行 Team 系统演示
+# 杩愯 Team 绯荤粺婕旂ず
 npm run demo:team
 ```
 
-演示包含多个场景：
-1. Team 外提交简单任务
-2. Team 外提交复杂任务（建议进入 Team）
-3. 进入 Team
-4. Team 内提交任务
-5. 退出 Team
+婕旂ず鍖呭惈澶氫釜鍦烘櫙锛?
+1. Team 澶栨彁浜ょ畝鍗曚换鍔?
+2. Team 澶栨彁浜ゅ鏉備换鍔★紙寤鸿杩涘叆 Team锛?
+3. 杩涘叆 Team
+4. Team 鍐呮彁浜や换鍔?
+5. 閫€鍑?Team

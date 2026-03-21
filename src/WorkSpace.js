@@ -1,7 +1,6 @@
 // ─────────────────────────────────────────────
 //  WorkSpace —— 工作空间
 // ─────────────────────────────────────────────
-import { TeamRegistry } from './TeamRegistry.js';
 import { Team } from './Team.js';
 import { Agent } from './agent.js';
 import { readFileSync } from 'fs';
@@ -12,12 +11,14 @@ import { join } from 'path';
  *
  * 职责：
  * 1. 创建 Team 及管理 Team 的生命周期
- * 2. 根据任务是否带有 teamId，决定交给指定 Team 或 Agent
- * 3. 返回 Team 或 Agent 完成的结果给用户
+ * 2. 管理 Teams 的集合和当前 Team 状态
+ * 3. 根据任务是否带有 teamId，决定交给指定 Team 或 Agent
+ * 4. 返回 Team 或 Agent 完成的结果给用户
  */
 export class WorkSpace {
-  constructor(configPath = './src/TeamConfig.json') {
-    this.registry = new TeamRegistry();
+  constructor(configPath = './src/Config.json') {
+    this.teams = new Map();  // id -> Team
+    this.currentTeamId = null;  // 用户当前所在的 Team（null = Team 外）
     this.configPath = configPath;
     this.defaultAgent = null;  // 默认 Agent（用于非 Team 任务）
   }
@@ -35,14 +36,14 @@ export class WorkSpace {
     // 创建 Teams
     for (const teamConfig of Object.values(config.teams)) {
       const team = new Team(teamConfig.id, teamConfig);
-      this.registry.registerTeam(team);
-      console.log(`✓ Team 创建成功: ${team.name} (${team.members.length} Members)`);
+      this.teams.set(team.id, team);
+      console.log(`✓ Team 创建成功: ${team.name} (${team.members.length} members)`);
     }
 
-    console.log(`\n📦 共加载 ${this.registry.getAllTeams().length} 个 Teams`);
+    console.log(`\n📦 共加载 ${this.teams.size} 个 Teams`);
 
     // 列出所有 Teams
-    this.registry.listTeams();
+    this.listTeams();
   }
 
   /**
@@ -86,13 +87,13 @@ export class WorkSpace {
    * @returns {Promise<object>} 任务执行结果
    */
   async handleTaskWithTeam(teamId, task) {
-    const team = this.registry.getTeam(teamId);
+    const team = this.teams.get(teamId);
 
     if (!team) {
       return {
         success: false,
         error: `❌ Team "${teamId}" 不存在`,
-        availableTeams: this.registry.getAllTeams().map(t => ({ id: t.id, name: t.name })),
+        availableTeams: this.getAllTeams().map(t => ({ id: t.id, name: t.name })),
       };
     }
 
@@ -149,15 +150,15 @@ export class WorkSpace {
    * @param {string} teamConfig.id - Team ID
    * @param {string} teamConfig.name - Team 名称
    * @param {string} teamConfig.description - Team 描述
-   * @param {Array} teamConfig.teamMembers - TeamMembers 配置
+   * @param {Array} teamConfig.teamMembers - Members 配置
    * @returns {Promise<Team>} 创建的 Team 实例
    */
   async createTeam(teamConfig) {
     const team = new Team(teamConfig.id, teamConfig);
     await team.initialize();
-    this.registry.registerTeam(team);
+    this.teams.set(team.id, team);
 
-    console.log(`✓ Team 创建成功: ${team.name} (${team.members.length} Members)`);
+    console.log(`✓ Team 创建成功: ${team.name} (${team.members.length} members)`);
 
     return team;
   }
@@ -165,39 +166,86 @@ export class WorkSpace {
   /**
    * 销毁 Team
    * @param {string} teamId - Team ID
+   * @returns {boolean} 是否成功销毁
    */
   destroyTeam(teamId) {
-    const success = this.registry.unregisterTeam(teamId);
-
-    if (success) {
-      console.log(`✓ Team 已销毁: ${teamId}`);
-    } else {
+    const team = this.teams.get(teamId);
+    if (!team) {
       console.log(`❌ Team 不存在: ${teamId}`);
+      return false;
     }
 
-    return success;
+    // 先退出 Team（如果用户在其中）
+    if (this.currentTeamId === teamId) {
+      team.exit();
+      this.currentTeamId = null;
+    }
+
+    this.teams.delete(teamId);
+    console.log(`✓ Team 已销毁: ${teamId}`);
+
+    return true;
   }
 
   /**
    * 进入 Team
    * @param {string} teamId - Team ID
+   * @returns {Promise<boolean>} 是否成功进入
    */
   async enterTeam(teamId) {
-    return await this.registry.enterTeam(teamId);
+    const team = this.teams.get(teamId);
+    if (!team) {
+      console.log(`\n❌ Team "${teamId}" 不存在`);
+      return false;
+    }
+
+    // 如果在其他 Team，先退出
+    if (this.currentTeamId && this.currentTeamId !== teamId) {
+      const currentTeam = this.teams.get(this.currentTeamId);
+      await currentTeam.exit();
+    }
+
+    // 进入新 Team
+    await team.enter();
+    this.currentTeamId = teamId;
+
+    return true;
   }
 
   /**
    * 退出当前 Team
    */
   async exitTeam() {
-    return await this.registry.exitCurrentTeam();
+    if (!this.currentTeamId) {
+      console.log('\n📍 你当前不在任何 Team 中');
+      return;
+    }
+
+    const team = this.teams.get(this.currentTeamId);
+    await team.exit();
+    this.currentTeamId = null;
   }
 
   /**
-   * 列出所有 Teams
+   * 列出所有 Team 信息
    */
   listTeams() {
-    this.registry.listTeams();
+    const teams = this.getAllTeams();
+    const currentTeamId = this.currentTeamId;
+
+    console.log('\n📋 可用的 Teams：\n');
+
+    for (const team of teams) {
+      const isCurrent = team.id === currentTeamId ? ' [当前]' : '';
+      const memberCount = team.members.length;
+      const capabilities = team.getCapabilities().join(', ') || '无';
+
+      console.log(`  ${team.name} (${team.id})${isCurrent}`);
+      console.log(`    描述: ${team.description || '无'}`);
+      console.log(`    Members: ${memberCount} members`);
+      console.log(`    能力: ${capabilities}`);
+      console.log('');
+    }
   }
 
   /**
@@ -205,7 +253,7 @@ export class WorkSpace {
    * @returns {Array<Team>} 所有 Team 实例
    */
   getAllTeams() {
-    return this.registry.getAllTeams();
+    return Array.from(this.teams.values());
   }
 
   /**
@@ -214,7 +262,7 @@ export class WorkSpace {
    * @returns {Team|null} Team 实例
    */
   getTeam(teamId) {
-    return this.registry.getTeam(teamId);
+    return this.teams.get(teamId);
   }
 
   /**
@@ -222,6 +270,9 @@ export class WorkSpace {
    * @returns {Team|null} 当前活跃 Team 实例
    */
   getCurrentTeam() {
-    return this.registry.getCurrentTeam();
+    if (!this.currentTeamId) {
+      return null;
+    }
+    return this.teams.get(this.currentTeamId);
   }
 }

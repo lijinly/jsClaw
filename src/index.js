@@ -4,7 +4,7 @@
 import 'dotenv/config';
 import readline from 'readline';
 import { initLLM } from './llm.js';
-import { runAgentWithThink } from './agent.js';
+import { Agent } from './agent.js';
 import './skills/builtins.js';  // 加载内置技能（含 list_skills、read_skill）
 
 initLLM();
@@ -16,6 +16,12 @@ const rl = readline.createInterface({
 
 const history = [];
 
+// 创建 Agent 实例
+const agent = new Agent({
+  name: '助手',
+  role: '智能助手',
+});
+
 console.log('\n🚀 jsClaw Agent 启动！（输入 exit 退出）\n');
 
 function prompt() {
@@ -25,7 +31,7 @@ function prompt() {
     if (input.toLowerCase() === 'exit') { rl.close(); return; }
 
   try {
-    const { result } = await runAgentWithThink(input, { history });
+    const { result } = await agent.run(input, { history });
     console.log(`\nAgent: ${result}\n`);
       // 保存对话历史
       history.push({ role: 'user', content: input });

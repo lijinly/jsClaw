@@ -1,82 +1,82 @@
-# WorkSpace —— 工作空间
+# WorkSpace 鈥斺€?宸ヤ綔绌洪棿
 
-## 🏠 什么是 WorkSpace？
+## 馃彔 浠€涔堟槸 WorkSpace锛?
 
-WorkSpace 是统一的工作空间入口，负责：
-1. 创建和管理 Team 的生命周期
-2. 根据任务是否带有 `teamId`，智能路由到指定 Team 或 Agent
-3. 返回 Team 或 Agent 完成的结果给用户
+WorkSpace 鏄粺涓€鐨勫伐浣滅┖闂村叆鍙ｏ紝璐熻矗锛?
+1. 鍒涘缓鍜岀鐞?Team 鐨勭敓鍛藉懆鏈?
+2. 鏍规嵁浠诲姟鏄惁甯︽湁 `teamId`锛屾櫤鑳借矾鐢卞埌鎸囧畾 Team 鎴?Agent
+3. 杩斿洖 Team 鎴?Agent 瀹屾垚鐨勭粨鏋滅粰鐢ㄦ埛
 
-### WorkSpace 的核心职责
+### WorkSpace 鐨勬牳蹇冭亴璐?
 
 ```javascript
 WorkSpace {
-  // 1. Team 生命周期管理
-  createTeam(config)     // 创建 Team
-  destroyTeam(teamId)    // 销毁 Team
-  initialize()           // 初始化系统
+  // 1. Team 鐢熷懡鍛ㄦ湡绠＄悊
+  createTeam(config)     // 鍒涘缓 Team
+  destroyTeam(teamId)    // 閿€姣?Team
+  initialize()           // 鍒濆鍖栫郴缁?
 
-  // 2. 任务路由
-  submitTask(task)       // 提交任务（带 teamId → Team，不带 → Agent）
+  // 2. 浠诲姟璺敱
+  submitTask(task)       // 鎻愪氦浠诲姟锛堝甫 teamId 鈫?Team锛屼笉甯?鈫?Agent锛?
 
-  // 3. Team 访问控制
-  enterTeam(teamId)      // 进入 Team
-  exitTeam()             // 退出 Team
-  listTeams()            // 列出所有 Teams
+  // 3. Team 璁块棶鎺у埗
+  enterTeam(teamId)      // 杩涘叆 Team
+  exitTeam()             // 閫€鍑?Team
+  listTeams()            // 鍒楀嚭鎵€鏈?Teams
 }
 ```
 
-### 任务路由逻辑
+### 浠诲姟璺敱閫昏緫
 
 ```
-用户提交任务
-    │
-    ├─→ 有 teamId？
-    │   ├─ 是 → 交给指定 Team 执行
-    │   │         ↓
-    │   │      Team Leader 组织 TeamMembers 协作
-    │   │         ↓
-    │   │      返回结果
-    │   │
-    │   └─ 否 → 交给 Agent 执行
-    │             ↓
-    │          Agent 使用 Think-Act 模式完成
-    │             ↓
-    │          返回结果
+鐢ㄦ埛鎻愪氦浠诲姟
+    鈹?
+    鈹溾攢鈫?鏈?teamId锛?
+    鈹?  鈹溾攢 鏄?鈫?浜ょ粰鎸囧畾 Team 鎵ц
+    鈹?  鈹?        鈫?
+    鈹?  鈹?     Team Leader 缁勭粐 Members 鍗忎綔
+    鈹?  鈹?        鈫?
+    鈹?  鈹?     杩斿洖缁撴灉
+    鈹?  鈹?
+    鈹?  鈹斺攢 鍚?鈫?浜ょ粰 Agent 鎵ц
+    鈹?            鈫?
+    鈹?         Agent 浣跨敤 Think-Act 妯″紡瀹屾垚
+    鈹?            鈫?
+    鈹?         杩斿洖缁撴灉
 ```
 
-## 📝 使用示例
+## 馃摑 浣跨敤绀轰緥
 
-### 基础用法
+### 鍩虹鐢ㄦ硶
 
 ```javascript
 import 'dotenv/config';
 import { initLLM } from './llm.js';
 import { WorkSpace } from './WorkSpace.js';
 
-// 初始化 LLM
+// 鍒濆鍖?LLM
 initLLM();
 
-// 创建 WorkSpace
+// 鍒涘缓 WorkSpace
 const workspace = new WorkSpace();
 await workspace.initialize();
 
-// 场景 1: 不带 teamId 的任务（交给 Agent）
-const result1 = await workspace.submitTask('现在几点了？');
+// 鍦烘櫙 1: 涓嶅甫 teamId 鐨勪换鍔★紙浜ょ粰 Agent锛?
+const result1 = await workspace.submitTask('鐜板湪鍑犵偣浜嗭紵');
 console.log(result1.executor); // 'Agent'
-console.log(result1.result);   // 执行结果
+console.log(result1.result);   // 鎵ц缁撴灉
 
-// 场景 2: 带 teamId 的任务（交给指定 Team）
+// 鍦烘櫙 2: 甯?teamId 鐨勪换鍔★紙浜ょ粰鎸囧畾 Team锛?
 const result2 = await workspace.submitTask({
-  description: '帮我列出当前目录的文件',
+  description: '甯垜鍒楀嚭褰撳墠鐩綍鐨勬枃浠?,
   teamId: 'dev-team',
 });
 console.log(result2.executor); // 'Team'
 console.log(result2.executorName); // 'dev-team'
-console.log(result2.result);   // 执行结果
+console.log(result2.result);   // 鎵ц缁撴灉
 ```
 
-### Team 生命周期管理
+### Team 鐢熷懡鍛ㄦ湡绠＄悊
 
 ```javascript
 import { WorkSpace } from './WorkSpace.js';
@@ -84,12 +84,12 @@ import { WorkSpace } from './WorkSpace.js';
 const workspace = new WorkSpace();
 await workspace.initialize();
 
-// 1. 创建新的 Team
+// 1. 鍒涘缓鏂扮殑 Team
 const newTeam = await workspace.createTeam({
   id: 'my-team',
-  name: '我的团队',
-  description: '用于特定任务',
-  teamMembers: [
+  name: '鎴戠殑鍥㈤槦',
+  description: '鐢ㄤ簬鐗瑰畾浠诲姟',
+  Members: [
     {
       id: 'member-1',
       role: 'developer',
@@ -98,15 +98,15 @@ const newTeam = await workspace.createTeam({
   ],
 });
 
-// 2. 使用 Team
+// 2. 浣跨敤 Team
 await workspace.enterTeam('my-team');
-const result = await workspace.submitTask('分析代码结构');
+const result = await workspace.submitTask('鍒嗘瀽浠ｇ爜缁撴瀯');
 
-// 3. 销毁 Team
+// 3. 閿€姣?Team
 await workspace.destroyTeam('my-team');
 ```
 
-### Team 访问控制
+### Team 璁块棶鎺у埗
 
 ```javascript
 import { WorkSpace } from './WorkSpace.js';
@@ -114,165 +114,166 @@ import { WorkSpace } from './WorkSpace.js';
 const workspace = new WorkSpace();
 await workspace.initialize();
 
-// 列出所有 Teams
+// 鍒楀嚭鎵€鏈?Teams
 workspace.listTeams();
 
-// 进入 Team
+// 杩涘叆 Team
 await workspace.enterTeam('dev-team');
 
-// 在 Team 内提交任务
+// 鍦?Team 鍐呮彁浜や换鍔?
 const result = await workspace.submitTask({
-  description: '读取 package.json',
-  // 不需要 teamId，会自动使用当前 Team
+  description: '璇诲彇 package.json',
+  // 涓嶉渶瑕?teamId锛屼細鑷姩浣跨敤褰撳墠 Team
 });
 
-// 退出 Team
+// 閫€鍑?Team
 await workspace.exitTeam();
 ```
 
-## 🏗️ 架构设计
+## 馃彈锔?鏋舵瀯璁捐
 
-### 核心组件
-
-```
-WorkSpace（统一入口）
-  │
-  ├─ Agent（单一执行者）
-  │   ├─ Think-Act 模式
-  │   ├─ 基础工具（read, write, list, exec 等）
-  │   └─ 执行简单任务
-  │
-  ├─ TeamRegistry（Team 管理）
-  │   ├─ 管理所有 Teams
-  │   ├─ 处理 Team 进入/退出
-  │   └─ 查找和匹配 Team
-  │
-  └─ Team（协作团队）
-      ├─ TeamLeader（编排者）
-      │   └─ 组织 TeamMembers 协作
-      │
-      └─ TeamMembers（执行者）
-           ├─ TeamMember-1（角色：developer）
-           ├─ TeamMember-2（角色：researcher）
-           └─ ...
-```
-
-### 与旧架构的对比
-
-**旧架构（TeamLab）：**
-```
-用户 → TeamLab → (当前在 Team?)
-                     ├─ 是 → Team Leader 执行
-                     └─ 否 → Agent 决策
-                              ├─ 简单 → 自己完成
-                              └─ 复杂 → 建议进入 Team
-```
-
-**新架构（WorkSpace）：**
-```
-用户 → WorkSpace → (任务有 teamId?)
-                        ├─ 是 → 指定 Team 执行
-                        └─ 否 → Agent 执行
-```
-
-**改进点：**
-- ✅ 更清晰的路由逻辑：显式指定 `teamId` 或默认使用 Agent
-- ✅ 更简单的接口：统一 `submitTask()` 方法
-- ✅ 更可控的执行：用户明确知道任务会交给谁执行
-- ✅ 保持灵活性：支持进入/退出 Team 的传统模式
-
-## 🔄 任务处理流程
-
-### 场景 1：不带 teamId 的任务
+### 鏍稿績缁勪欢
 
 ```
-用户: workspace.submitTask('现在几点了？')
-   ↓
-[WorkSpace 检测：没有 teamId]
-   ↓
-[WorkSpace 路由：交给 Agent]
-   ↓
-[Agent 执行：Think-Act 模式]
-   ├─ Think: 分析任务需求
-   ├─ Act: 调用工具获取时间
-   └─ 返回结果
-   ↓
-返回给用户
+WorkSpace锛堢粺涓€鍏ュ彛锛?
+  鈹?
+  鈹溾攢 Agent锛堝崟涓€鎵ц鑰咃級
+  鈹?  鈹溾攢 Think-Act 妯″紡
+  鈹?  鈹溾攢 鍩虹宸ュ叿锛坮ead, write, list, exec 绛夛級
+  鈹?  鈹斺攢 鎵ц绠€鍗曚换鍔?
+  鈹?
+  鈹溾攢 Teams 绠＄悊
+  鈹?  鈹溾攢 teams Map 鈥?鎵€鏈?Teams 鐨勯泦鍚?
+  鈹?  鈹溾攢 currentTeamId 鈥?褰撳墠婵€娲荤殑 Team
+  鈹?  鈹溾攢 enterTeam() / exitTeam() 鈥?Team 杩涘叆/閫€鍑?
+  鈹?  鈹斺攢 createTeam() / destroyTeam() 鈥?Team 鐢熷懡鍛ㄦ湡
+  鈹?
+  鈹斺攢 Team锛堝崗浣滃洟闃燂級
+      鈹溾攢 submitTask() - 浠诲姟鎻愪氦鍜屽崗璋?
+      鈹溾攢 analyzeTask() - 鍒嗘瀽浠诲姟闇€姹?
+      鈹溾攢 selectMembers() - 閫夋嫨鍚堥€傜殑 Members
+      鈹斺攢 Members锛堟墽琛岃€咃級
+           鈹溾攢 Member-1锛堣鑹诧細developer锛?
+           鈹溾攢 Member-2锛堣鑹诧細researcher锛?
+           鈹斺攢 ...
+```
+
+### 涓庢棫鏋舵瀯鐨勫姣?
+
+**鏃ф灦鏋勶紙TeamLab锛夛細**
+```
+鐢ㄦ埛 鈫?TeamLab 鈫?(褰撳墠鍦?Team?)
+                     鈹溾攢 鏄?鈫?Team Leader 鎵ц
+                     鈹斺攢 鍚?鈫?Agent 鍐崇瓥
+                              鈹溾攢 绠€鍗?鈫?鑷繁瀹屾垚
+                              鈹斺攢 澶嶆潅 鈫?寤鸿杩涘叆 Team
+```
+
+**鏂版灦鏋勶紙WorkSpace锛夛細**
+```
+鐢ㄦ埛 鈫?WorkSpace 鈫?(浠诲姟鏈?teamId?)
+                        鈹溾攢 鏄?鈫?鎸囧畾 Team 鎵ц
+                        鈹斺攢 鍚?鈫?Agent 鎵ц
+```
+
+**鏀硅繘鐐癸細**
+- 鉁?鏇存竻鏅扮殑璺敱閫昏緫锛氭樉寮忔寚瀹?`teamId` 鎴栭粯璁や娇鐢?Agent
+- 鉁?鏇寸畝鍗曠殑鎺ュ彛锛氱粺涓€ `submitTask()` 鏂规硶
+- 鉁?鏇村彲鎺х殑鎵ц锛氱敤鎴锋槑纭煡閬撲换鍔′細浜ょ粰璋佹墽琛?
+- 鉁?淇濇寔鐏垫椿鎬э細鏀寔杩涘叆/閫€鍑?Team 鐨勪紶缁熸ā寮?
+
+## 馃攧 浠诲姟澶勭悊娴佺▼
+
+### 鍦烘櫙 1锛氫笉甯?teamId 鐨勪换鍔?
+
+```
+鐢ㄦ埛: workspace.submitTask('鐜板湪鍑犵偣浜嗭紵')
+   鈫?
+[WorkSpace 妫€娴嬶細娌℃湁 teamId]
+   鈫?
+[WorkSpace 璺敱锛氫氦缁?Agent]
+   鈫?
+[Agent 鎵ц锛歍hink-Act 妯″紡]
+   鈹溾攢 Think: 鍒嗘瀽浠诲姟闇€姹?
+   鈹溾攢 Act: 璋冪敤宸ュ叿鑾峰彇鏃堕棿
+   鈹斺攢 杩斿洖缁撴灉
+   鈫?
+杩斿洖缁欑敤鎴?
 {
   success: true,
   executor: 'Agent',
   executorName: 'WorkSpace Agent',
-  result: '现在是 2026-03-21 21:06'
+  result: '鐜板湪鏄?2026-03-21 21:06'
 }
 ```
 
-### 场景 2：带 teamId 的任务
+### 鍦烘櫙 2锛氬甫 teamId 鐨勪换鍔?
 
 ```
-用户: workspace.submitTask({
-  description: '分析代码结构',
+鐢ㄦ埛: workspace.submitTask({
+  description: '鍒嗘瀽浠ｇ爜缁撴瀯',
   teamId: 'dev-team'
 })
-   ↓
-[WorkSpace 检测：有 teamId = 'dev-team']
-   ↓
-[WorkSpace 路由：交给 dev-team]
-   ↓
-[Team Leader 接收任务]
-   ├─ 分析任务需求
-   ├─ 选择合适的 TeamMember
-   └─ 组织 TeamMembers 协作执行
-   ↓
-返回给用户
+   鈫?
+[WorkSpace 妫€娴嬶細鏈?teamId = 'dev-team']
+   鈫?
+[WorkSpace 璺敱锛氫氦缁?dev-team]
+   鈫?
+[Team Leader 鎺ユ敹浠诲姟]
+   鈹溾攢 鍒嗘瀽浠诲姟闇€姹?
+   鈹溾攢 閫夋嫨鍚堥€傜殑 Member
+   鈹斺攢 缁勭粐 Members 鍗忎綔鎵ц
+   鈫?
+杩斿洖缁欑敤鎴?
 {
   success: true,
   executor: 'Team',
-  executorName: '开发团队',
+  executorName: '寮€鍙戝洟闃?,
   teamId: 'dev-team',
-  result: '代码结构分析结果...'
+  result: '浠ｇ爜缁撴瀯鍒嗘瀽缁撴灉...'
 }
 ```
 
-### 场景 3：Team 不存在
+### 鍦烘櫙 3锛歍eam 涓嶅瓨鍦?
 
 ```
-用户: workspace.submitTask({
-  description: '执行任务',
+鐢ㄦ埛: workspace.submitTask({
+  description: '鎵ц浠诲姟',
   teamId: 'non-existent-team'
 })
-   ↓
-[WorkSpace 检测：有 teamId = 'non-existent-team']
-   ↓
-[WorkSpace 查找：Team 不存在]
-   ↓
-返回错误信息
+   鈫?
+[WorkSpace 妫€娴嬶細鏈?teamId = 'non-existent-team']
+   鈫?
+[WorkSpace 鏌ユ壘锛歍eam 涓嶅瓨鍦╙
+   鈫?
+杩斿洖閿欒淇℃伅
 {
   success: false,
-  error: '❌ Team "non-existent-team" 不存在',
+  error: '鉂?Team "non-existent-team" 涓嶅瓨鍦?,
   availableTeams: [
-    { id: 'dev-team', name: '开发团队' },
-    { id: 'research-team', name: '研究团队' }
+    { id: 'dev-team', name: '寮€鍙戝洟闃? },
+    { id: 'research-team', name: '鐮旂┒鍥㈤槦' }
   ]
 }
 ```
 
-## 📦 API 文档
+## 馃摝 API 鏂囨。
 
-### WorkSpace 类
+### WorkSpace 绫?
 
-#### 构造函数
+#### 鏋勯€犲嚱鏁?
 
 ```javascript
-new WorkSpace(configPath = './src/TeamConfig.json')
+new WorkSpace(configPath = './src/Config.json')
 ```
 
-- `configPath` - Team 配置文件路径（可选）
+- `configPath` - Team 閰嶇疆鏂囦欢璺緞锛堝彲閫夛級
 
-#### 方法
+#### 鏂规硶
 
 ##### `async initialize()`
 
-初始化 WorkSpace，加载配置并创建 Teams。
+鍒濆鍖?WorkSpace锛屽姞杞介厤缃苟鍒涘缓 Teams銆?
 
 ```javascript
 await workspace.initialize();
@@ -280,14 +281,14 @@ await workspace.initialize();
 
 ##### `async submitTask(task)`
 
-提交任务（统一接口）。
+鎻愪氦浠诲姟锛堢粺涓€鎺ュ彛锛夈€?
 
-**参数：**
-- `task` - 任务对象或任务描述字符串
-  - `description` - 任务描述（如果 `task` 是字符串，则直接使用）
-  - `teamId` - 指定 Team ID（可选）
+**鍙傛暟锛?*
+- `task` - 浠诲姟瀵硅薄鎴栦换鍔℃弿杩板瓧绗︿覆
+  - `description` - 浠诲姟鎻忚堪锛堝鏋?`task` 鏄瓧绗︿覆锛屽垯鐩存帴浣跨敤锛?
+  - `teamId` - 鎸囧畾 Team ID锛堝彲閫夛級
 
-**返回值：**
+**杩斿洖鍊硷細**
 ```javascript
 {
   success: boolean,
@@ -300,32 +301,32 @@ await workspace.initialize();
 }
 ```
 
-**示例：**
+**绀轰緥锛?*
 ```javascript
-// 字符串形式
-await workspace.submitTask('现在几点了？');
+// 瀛楃涓插舰寮?
+await workspace.submitTask('鐜板湪鍑犵偣浜嗭紵');
 
-// 对象形式（不带 teamId）
-await workspace.submitTask({ description: '分析代码' });
+// 瀵硅薄褰㈠紡锛堜笉甯?teamId锛?
+await workspace.submitTask({ description: '鍒嗘瀽浠ｇ爜' });
 
-// 对象形式（带 teamId）
+// 瀵硅薄褰㈠紡锛堝甫 teamId锛?
 await workspace.submitTask({
-  description: '分析代码',
+  description: '鍒嗘瀽浠ｇ爜',
   teamId: 'dev-team'
 });
 ```
 
 ##### `async createTeam(teamConfig)`
 
-创建新的 Team。
+鍒涘缓鏂扮殑 Team銆?
 
-**参数：**
+**鍙傛暟锛?*
 ```javascript
 {
   id: string,
   name: string,
   description: string,
-  teamMembers: Array<{
+  Members: Array<{
     id: string,
     role: string,
     skills: string[]
@@ -333,126 +334,123 @@ await workspace.submitTask({
 }
 ```
 
-**返回值：** `Team` 实例
+**杩斿洖鍊硷細** `Team` 瀹炰緥
 
 ##### `destroyTeam(teamId)`
 
-销毁 Team。
+閿€姣?Team銆?
 
-**参数：**
+**鍙傛暟锛?*
 - `teamId` - Team ID
 
-**返回值：** `boolean` - 是否成功
+**杩斿洖鍊硷細** `boolean` - 鏄惁鎴愬姛
 
 ##### `async enterTeam(teamId)`
 
-进入 Team。
+杩涘叆 Team銆?
 
-**参数：**
+**鍙傛暟锛?*
 - `teamId` - Team ID
 
 ##### `async exitTeam()`
 
-退出当前 Team。
+閫€鍑哄綋鍓?Team銆?
 
 ##### `listTeams()`
 
-列出所有 Teams。
+鍒楀嚭鎵€鏈?Teams銆?
 
 ##### `getAllTeams()`
 
-获取所有 Teams。
+鑾峰彇鎵€鏈?Teams銆?
 
-**返回值：** `Array<Team>` - 所有 Team 实例
+**杩斿洖鍊硷細** `Array<Team>` - 鎵€鏈?Team 瀹炰緥
 
 ##### `getTeam(teamId)`
 
-获取指定 Team。
+鑾峰彇鎸囧畾 Team銆?
 
-**参数：**
+**鍙傛暟锛?*
 - `teamId` - Team ID
 
-**返回值：** `Team | null` - Team 实例
+**杩斿洖鍊硷細** `Team | null` - Team 瀹炰緥
 
 ##### `getCurrentTeam()`
 
-获取当前活跃 Team。
+鑾峰彇褰撳墠娲昏穬 Team銆?
 
-**返回值：** `Team | null` - 当前活跃 Team 实例
+**杩斿洖鍊硷細** `Team | null` - 褰撳墠娲昏穬 Team 瀹炰緥
 
-## 📦 相关文件
+## 馃摝 鐩稿叧鏂囦欢
 
-- `src/WorkSpace.js` - WorkSpace 核心实现
-- `src/Agent.js` - Agent 核心实现
-- `src/Team.js` - Team 核心实现
-- `src/TeamMember.js` - TeamMember 核心实现
-- `src/TeamLeader.js` - Team 内的 Leader
-- `src/TeamRegistry.js` - Team 注册和管理
-- `src/TeamConfig.json` - Team 配置文件
-- `src/demo-team.js` - 演示示例
+- `src/WorkSpace.js` - WorkSpace 鏍稿績瀹炵幇锛堝寘鍚?Teams 绠＄悊锛?
+- `src/Agent.js` - Agent 鏍稿績瀹炵幇
+- `src/Team.js` - Team 鏍稿績瀹炵幇
+- `src/Member.js` - Member 鏍稿績瀹炵幇
+- `src/Config.json` - 配置文件
 
-## 🚀 运行演示
+## 馃殌 杩愯婕旂ず
 
 ```bash
-# 运行 Team 系统演示
+# 杩愯 Team 绯荤粺婕旂ず
 npm run demo:team
 ```
 
-演示包含多个场景：
-1. 不带 teamId 的任务（交给 Agent）
-2. 带 teamId 的任务（交给指定 Team）
-3. 进入 Team 后提交任务
+婕旂ず鍖呭惈澶氫釜鍦烘櫙锛?
+1. 涓嶅甫 teamId 鐨勪换鍔★紙浜ょ粰 Agent锛?
+2. 甯?teamId 鐨勪换鍔★紙浜ょ粰鎸囧畾 Team锛?
+3. 杩涘叆 Team 鍚庢彁浜や换鍔?
 
-## 📋 迁移指南
+## 馃搵 杩佺Щ鎸囧崡
 
-### 从 TeamLab 迁移到 WorkSpace
+### 浠?TeamLab 杩佺Щ鍒?WorkSpace
 
-**旧代码（TeamLab）：**
+**鏃т唬鐮侊紙TeamLab锛夛細**
 ```javascript
 import { TeamLab } from './TeamLab.js';
 
 const teamSystem = new TeamLab();
 await teamSystem.initialize();
 
-// Team 外任务
-const result1 = await teamSystem.submitTask('简单任务');
+// Team 澶栦换鍔?
+const result1 = await teamSystem.submitTask('绠€鍗曚换鍔?);
 
-// 进入 Team
+// 杩涘叆 Team
 await teamSystem.enterTeam('dev-team');
 
-// Team 内任务
-const result2 = await teamSystem.submitTask('复杂任务');
+// Team 鍐呬换鍔?
+const result2 = await teamSystem.submitTask('澶嶆潅浠诲姟');
 ```
 
-**新代码（WorkSpace）：**
+**鏂颁唬鐮侊紙WorkSpace锛夛細**
 ```javascript
 import { WorkSpace } from './WorkSpace.js';
 
 const workspace = new WorkSpace();
 await workspace.initialize();
 
-// 交给 Agent
-const result1 = await workspace.submitTask('简单任务');
+// 浜ょ粰 Agent
+const result1 = await workspace.submitTask('绠€鍗曚换鍔?);
 
-// 交给指定 Team
+// 浜ょ粰鎸囧畾 Team
 const result2 = await workspace.submitTask({
-  description: '复杂任务',
+  description: '澶嶆潅浠诲姟',
   teamId: 'dev-team'
 });
 
-// 或者进入 Team 后提交
+// 鎴栬€呰繘鍏?Team 鍚庢彁浜?
 await workspace.enterTeam('dev-team');
-const result3 = await workspace.submitTask('复杂任务');
+const result3 = await workspace.submitTask('澶嶆潅浠诲姟');
 ```
 
-**主要变化：**
-1. `TeamLab` → `WorkSpace`
-2. 显式指定 `teamId` 或默认使用 Agent
-3. 返回结果格式统一，包含 `executor` 和 `executorName`
+**涓昏鍙樺寲锛?*
+1. `TeamLab` 鈫?`WorkSpace`
+2. 鏄惧紡鎸囧畾 `teamId` 鎴栭粯璁や娇鐢?Agent
+3. 杩斿洖缁撴灉鏍煎紡缁熶竴锛屽寘鍚?`executor` 鍜?`executorName`
 
-## 🎯 设计原则
+## 馃幆 璁捐鍘熷垯
 
-1. **显式路由**：通过 `teamId` 显式指定执行者，避免模糊决策
-2. **简化接口**：统一 `submitTask()` 方法，支持字符串和对象两种格式
-3. **清晰反馈**：返回结果包含执行者信息，用户明确知道谁执行了任务
-4. **保持兼容**：支持传统的进入/退出 Team 模式
+1. **鏄惧紡璺敱**锛氶€氳繃 `teamId` 鏄惧紡鎸囧畾鎵ц鑰咃紝閬垮厤妯＄硦鍐崇瓥
+2. **绠€鍖栨帴鍙?*锛氱粺涓€ `submitTask()` 鏂规硶锛屾敮鎸佸瓧绗︿覆鍜屽璞′袱绉嶆牸寮?
+3. **娓呮櫚鍙嶉**锛氳繑鍥炵粨鏋滃寘鍚墽琛岃€呬俊鎭紝鐢ㄦ埛鏄庣‘鐭ラ亾璋佹墽琛屼簡浠诲姟
+4. **淇濇寔鍏煎**锛氭敮鎸佷紶缁熺殑杩涘叆/閫€鍑?Team 妯″紡
