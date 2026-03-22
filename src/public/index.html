@@ -242,6 +242,16 @@
       color: var(--text-secondary);
       font-weight: 500;
     }
+    .chat-back-link {
+      font-size: 13px; color: var(--accent);
+      text-decoration: none;
+      margin-left: 12px;
+      cursor: pointer;
+    }
+    .chat-back-link:hover {
+      text-decoration: underline;
+      color: var(--accent-hover);
+    }
 
     .status-indicator {
       display: flex; align-items: center; gap: 6px;
@@ -484,7 +494,7 @@
     <!-- List Panel -->
     <div class="list-panel" id="listPanel">
       <!-- Agent/Team mode header -->
-      <div class="list-header">
+      <div class="list-header" id="modeHeader">
         <div style="display: flex; align-items: center; gap: 8px;">
           <button class="icon-btn" id="modeAgent" style="padding: 6px;">🤖</button>
           <button class="icon-btn" id="modeTeam" style="padding: 6px;">👥</button>
@@ -494,10 +504,18 @@
         </div>
       </div>
 
-      <!-- Back button for team sessions -->
-      <div class="list-header" id="sessionHeader" style="display: none;">
+      <!-- Team list header -->
+      <div class="list-header hidden" id="teamListHeader">
+        <div class="list-title">团队列表</div>
+        <div class="list-actions">
+          <button class="icon-btn" id="newTeamBtn" title="新建团队">➕</button>
+        </div>
+      </div>
+
+      <!-- Session list header (with back to teams) -->
+      <div class="list-header hidden" id="sessionHeader">
         <div style="display: flex; align-items: center; gap: 8px;">
-          <div class="list-back" id="backToTeams">← 返回团队</div>
+          <div class="list-back" id="backToTeams" style="display: flex;">← 返回团队</div>
         </div>
         <div class="list-title">会话历史</div>
         <div class="list-actions">
@@ -550,6 +568,7 @@
           <div class="chat-title" id="chatTitle">jsClaw</div>
           <span class="chat-mode-badge" id="modeBadge">Agent</span>
           <span class="chat-team-badge hidden" id="teamBadge">开发组</span>
+          <a href="#" class="chat-back-link hidden" id="chatBackToTeams">← 返回团队</a>
         </div>
         <div class="status-indicator">
           <div class="status-dot" id="statusDot"></div>
@@ -605,11 +624,14 @@
     const $ = id => document.getElementById(id);
     const modeAgent = $('modeAgent');
     const modeTeam = $('modeTeam');
+    const modeHeader = $('modeHeader');
+    const teamListHeader = $('teamListHeader');
     const teamList = $('teamList');
     const sessionList = $('sessionList');
     const sessionHeader = $('sessionHeader');
     const backToTeams = $('backToTeams');
     const newBtn = $('newBtn');
+    const newTeamBtn = $('newTeamBtn');
     const newSessionBtn = $('newSessionBtn');
     const messages = $('messages');
     const input = $('input');
@@ -619,6 +641,7 @@
     const chatTitle = $('chatTitle');
     const modeBadge = $('modeBadge');
     const teamBadge = $('teamBadge');
+    const chatBackToTeams = $('chatBackToTeams');
     const modeOptions = document.querySelectorAll('.mode-option');
 
     // Mode switch
@@ -631,24 +654,32 @@
       modeAgent.style.color = mode === 'agent' ? 'var(--accent)' : 'var(--text-secondary)';
       modeTeam.style.background = mode === 'team' ? 'var(--accent-light)' : 'transparent';
       modeTeam.style.color = mode === 'team' ? 'var(--accent)' : 'var(--text-secondary)';
-      
+
       modeBadge.textContent = mode === 'agent' ? 'Agent' : 'Team';
-      
-      if (mode === 'team') {
-        teamList.classList.remove('hidden');
-        sessionList.classList.add('hidden');
-        sessionHeader.style.display = 'none';
-        document.querySelector('.list-header').style.display = 'flex';
-        state.currentTeam = null;
-        teamBadge.classList.add('hidden');
-      } else {
+
+      if (mode === 'agent') {
+        // Agent 模式：显示 Agent header + 会话列表
+        modeHeader.classList.remove('hidden');
+        teamListHeader.classList.add('hidden');
+        sessionHeader.classList.add('hidden');
         teamList.classList.add('hidden');
         sessionList.classList.remove('hidden');
-        sessionHeader.style.display = 'none';
-        document.querySelector('.list-header').style.display = 'flex';
+        state.currentTeam = null;
+        teamBadge.classList.add('hidden');
+        chatBackToTeams.classList.add('hidden');
         loadSessions();
+      } else {
+        // Team 模式：显示 Team header + 团队列表
+        modeHeader.classList.add('hidden');
+        teamListHeader.classList.remove('hidden');
+        sessionHeader.classList.add('hidden');
+        teamList.classList.remove('hidden');
+        sessionList.classList.add('hidden');
+        state.currentTeam = null;
+        teamBadge.classList.add('hidden');
+        chatBackToTeams.classList.add('hidden');
       }
-      
+
       chatTitle.textContent = mode === 'agent' ? 'jsClaw - Agent' : 'jsClaw - Team';
     }
 
@@ -663,35 +694,45 @@
 
     function selectTeam(teamId, teamName) {
       state.currentTeam = { id: teamId, name: teamName };
-      
+
       // Highlight selected
       document.querySelectorAll('.team-item').forEach(el => el.classList.remove('selected'));
       teamList.querySelector(`[data-team="${teamId}"]`).classList.add('selected');
-      
+
       // Show sessions
+      teamListHeader.classList.add('hidden');
       teamList.classList.add('hidden');
+      sessionHeader.classList.remove('hidden');
       sessionList.classList.remove('hidden');
-      sessionHeader.style.display = 'flex';
-      document.querySelector('.list-header').style.display = 'none';
-      
+
       // Update header
       teamBadge.textContent = teamName;
       teamBadge.classList.remove('hidden');
       chatTitle.textContent = `jsClaw - ${teamName}`;
-      
+      chatBackToTeams.classList.remove('hidden');
+
       loadSessions(teamId);
     }
 
-    // Back to teams
-    backToTeams.addEventListener('click', () => {
+    // Back to teams (from sidebar)
+    backToTeams.addEventListener('click', () => backToTeamList());
+
+    // Back to teams (from chat header)
+    chatBackToTeams.addEventListener('click', (e) => {
+      e.preventDefault();
+      backToTeamList();
+    });
+
+    function backToTeamList() {
       state.currentTeam = null;
+      teamListHeader.classList.remove('hidden');
       teamList.classList.remove('hidden');
+      sessionHeader.classList.add('hidden');
       sessionList.classList.add('hidden');
-      sessionHeader.style.display = 'none';
-      document.querySelector('.list-header').style.display = 'flex';
       teamBadge.classList.add('hidden');
       chatTitle.textContent = 'jsClaw - Team';
-    });
+      chatBackToTeams.classList.add('hidden');
+    }
 
     // Load sessions
     async function loadSessions(teamId = null) {
@@ -782,9 +823,21 @@
       return div.innerHTML;
     }
 
-    // New session
-    newBtn.addEventListener('click', () => createSession());
+    // New session (agent mode or team session)
+    newBtn.addEventListener('click', () => {
+      if (state.mode === 'agent') {
+        createSession();
+      } else {
+        // Team 模式下，如果选中了团队，新建团队对话；如果没有选中，新建团队
+        if (state.currentTeam) {
+          createSession();
+        } else {
+          createTeam();
+        }
+      }
+    });
     newSessionBtn.addEventListener('click', () => createSession());
+    newTeamBtn.addEventListener('click', () => createTeam());
 
     async function createSession() {
       const teamId = state.currentTeam?.id;
@@ -797,10 +850,33 @@
         })
       });
       const session = await res.json();
-      
+
       state.currentSession = session;
       await loadSessions(teamId);
       await loadSession(session.id);
+    }
+
+    async function createTeam() {
+      const name = prompt('请输入团队名称:');
+      if (!name) return;
+
+      const description = prompt('请输入团队描述（可选）:') || '';
+
+      const res = await fetch('/api/teams', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          description
+        })
+      });
+
+      if (res.ok) {
+        alert('团队创建成功！');
+        // 刷新团队列表（这里简化处理，实际应该从服务器重新获取）
+      } else {
+        alert('团队创建失败！');
+      }
     }
 
     // Send message
