@@ -399,27 +399,6 @@
       display: flex; gap: 12px; align-items: flex-end;
     }
 
-    .mode-select {
-      display: flex; gap: 4px;
-      background: var(--surface);
-      border-radius: var(--radius);
-      padding: 4px;
-      border: 1px solid var(--border);
-    }
-
-    .mode-option {
-      padding: 6px 12px;
-      border-radius: var(--radius-sm);
-      border: none;
-      background: transparent;
-      color: var(--text-secondary);
-      font-size: 12px; font-weight: 500;
-      cursor: pointer;
-      transition: all 0.15s;
-    }
-    .mode-option:hover { color: var(--text); }
-    .mode-option.active { background: var(--bg); color: var(--accent); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
-
     .input-box {
       flex: 1;
       background: var(--surface);
@@ -593,11 +572,6 @@
       <!-- Input -->
       <div class="input-area">
         <div class="input-wrapper">
-          <div class="mode-select">
-            <button class="mode-option active" data-mode="craft">Craft</button>
-            <button class="mode-option" data-mode="plan">Plan</button>
-            <button class="mode-option" data-mode="ask">Ask</button>
-          </div>
           <textarea class="input-box" id="input" placeholder="输入消息..." rows="1"></textarea>
           <button class="send-btn" id="send">➤</button>
         </div>
@@ -636,7 +610,6 @@
     const modeBadge = $('modeBadge');
     const teamBadge = $('teamBadge');
     const chatBackToTeams = $('chatBackToTeams');
-    const modeOptions = document.querySelectorAll('.mode-option');
 
     // Mode switch (left sidebar)
     const navAgent = $('nav-agent');
@@ -917,14 +890,6 @@
       statusDot.className = `status-dot ${status === 'thinking' ? 'thinking' : status === 'error' ? 'error' : ''}`;
       statusText.textContent = text;
     }
-
-    // Mode options
-    modeOptions.forEach(opt => {
-      opt.addEventListener('click', () => {
-        modeOptions.forEach(o => o.classList.remove('active'));
-        opt.classList.add('active');
-      });
-    });
 
     // Auto-resize textarea
     input.addEventListener('input', () => {
