@@ -28,8 +28,7 @@
       --red: #f87171;
       --radius: 14px;
       --radius-sm: 8px;
-      --sidebar-w: 200px;
-      --list-w: 260px;
+      --sidebar-w: 280px;
     }
 
     html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); }
@@ -37,62 +36,48 @@
     /* ── Layout ── */
     .app { display: flex; height: 100vh; overflow: hidden; }
 
-    /* ── Mode Sidebar ── */
+    /* ── Sidebar (left) ── */
     .sidebar {
       width: var(--sidebar-w); min-width: var(--sidebar-w);
       background: var(--surface);
       border-right: 1px solid var(--border);
       display: flex; flex-direction: column;
-      padding: 20px 14px; gap: 24px;
+      padding: 16px;
+      gap: 16px;
     }
 
-    .logo { display: flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 700; letter-spacing: -.5px; }
+    .logo { display: flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 700; letter-spacing: -.5px; margin-bottom: 8px; }
     .logo-icon { width: 36px; height: 36px; background: var(--accent); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
 
-    .section-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: var(--text-dim); margin-bottom: 8px; }
-
-    .mode-tabs { display: flex; flex-direction: column; gap: 8px; }
-    .mode-tab { padding: 12px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: transparent; color: var(--text-muted); font-size: 14px; font-weight: 500; cursor: pointer; transition: all .15s; text-align: left; }
+    /* Mode tabs */
+    .mode-tabs { display: flex; gap: 8px; }
+    .mode-tab { flex: 1; padding: 10px 0; border-radius: var(--radius-sm); border: 1px solid var(--border); background: transparent; color: var(--text-muted); font-size: 13px; font-weight: 500; cursor: pointer; transition: all .15s; }
     .mode-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
     .mode-tab:hover:not(.active) { border-color: var(--accent-dim); color: var(--text); }
 
-    /* ── List Panel (middle) ── */
-    .list-panel {
-      width: var(--list-w); min-width: var(--list-w);
-      background: var(--bg);
-      border-right: 1px solid var(--border);
-      display: flex; flex-direction: column;
-      overflow: hidden;
-    }
+    /* Session list container */
+    .sess-container { flex: 1; display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg); }
 
-    .list-header {
-      padding: 16px 14px 12px;
+    .sess-header {
+      padding: 12px 14px;
       border-bottom: 1px solid var(--border);
       display: flex; align-items: center; justify-content: space-between;
-      flex-shrink: 0;
+      background: var(--surface2);
     }
-    .list-header-title { font-size: 13px; font-weight: 600; color: var(--text-muted); }
+    .sess-header-title { font-size: 13px; font-weight: 600; color: var(--text-muted); }
 
     .new-btn {
-      width: 28px; height: 28px; border-radius: var(--radius-sm);
+      width: 26px; height: 26px; border-radius: 6px;
       border: 1px solid var(--border); background: transparent;
-      color: var(--text-muted); font-size: 18px; cursor: pointer;
+      color: var(--text-muted); font-size: 16px; cursor: pointer;
       display: flex; align-items: center; justify-content: center;
       line-height: 1; transition: all .15s;
     }
     .new-btn:hover { border-color: var(--accent); color: var(--accent); }
 
-    .list-body { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 4px; }
-    .list-body::-webkit-scrollbar { width: 3px; }
-    .list-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-
-    /* Team items */
-    .team-item { padding: 12px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border); cursor: pointer; transition: all .15s; background: transparent; text-align: left; width: 100%; }
-    .team-item:hover { border-color: var(--accent-dim); background: var(--surface); }
-    .team-item.selected { border-color: var(--accent); background: var(--accent-dim); }
-    .team-item-name { font-size: 14px; font-weight: 600; color: var(--text); }
-    .team-item-desc { font-size: 12px; color: var(--text-muted); margin-top: 4px; line-height: 1.4; }
-    .team-item-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-dim); margin-top: 6px; }
+    .sess-list { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 4px; }
+    .sess-list::-webkit-scrollbar { width: 3px; }
+    .sess-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
     /* Session items */
     .sess-item {
@@ -127,16 +112,6 @@
     .sess-action-btn:hover { background: var(--red); color: #fff; }
 
     .empty-hint { padding: 24px 12px; text-align: center; color: var(--text-dim); font-size: 12px; line-height: 1.6; }
-
-    /* Session list panel (for Team mode) */
-    #sess-panel {
-      display: none; flex: 1; flex-direction: column; overflow: hidden;
-      border-top: 1px solid var(--border);
-      background: #0a0c10;
-    }
-    #sess-panel.visible { display: flex; }
-
-    #sess-panel .list-header { border-bottom: none; border-top: 1px solid var(--border); }
 
     /* ── Main chat area ── */
     .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
@@ -234,47 +209,32 @@
 <body>
 <div class="app">
 
-  <!-- ── Mode Sidebar (left-most) ── -->
+  <!-- ── Sidebar (left) ── -->
   <aside class="sidebar">
     <div class="logo">
       <div class="logo-icon">🦀</div>
       jsClaw
     </div>
 
-    <div>
-      <div class="section-label">模式</div>
-      <div class="mode-tabs">
-        <button class="mode-tab active" data-mode="agent">🤖 Agent 模式</button>
-        <button class="mode-tab" data-mode="team">👥 Team 模式</button>
+    <!-- Mode tabs -->
+    <div class="mode-tabs">
+      <button class="mode-tab active" data-mode="agent">Agent</button>
+      <button class="mode-tab" data-mode="team">Team</button>
+    </div>
+
+    <!-- Session list -->
+    <div class="sess-container">
+      <div class="sess-header">
+        <span class="sess-header-title">会话历史</span>
+        <button class="new-btn" id="new-sess-btn" title="新建会话">+</button>
+      </div>
+      <div class="sess-list" id="sess-list">
+        <div class="empty-hint">暂无会话<br>点击 + 新建</div>
       </div>
     </div>
   </aside>
 
-  <!-- ── List Panel (middle) ── -->
-  <div class="list-panel">
-    <!-- Team List (shown in Team mode) -->
-    <div id="team-panel" style="display: flex; flex-direction: column; flex: 1; overflow: hidden;">
-      <div class="list-header">
-        <span class="list-header-title">团队列表</span>
-      </div>
-      <div class="list-body" id="team-list">
-        <div class="empty-hint">加载中...</div>
-      </div>
-    </div>
-
-    <!-- Session List (shown in Agent mode, or after Team selected) -->
-    <div id="sess-panel">
-      <div class="list-header">
-        <span class="list-header-title">会话历史</span>
-        <button class="new-btn" id="new-sess-btn" title="新建会话">+</button>
-      </div>
-      <div class="list-body" id="sess-list">
-        <div class="empty-hint">暂无会话<br>点击 + 新建</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ── Main ── -->
+  <!-- ── Main (right) ── -->
   <main class="main">
     <header class="header">
       <div>
@@ -317,9 +277,6 @@ const sendBtn      = document.getElementById('send-btn');
 const statusDot    = document.getElementById('status-dot');
 const headerTitle  = document.getElementById('header-title');
 const headerSub    = document.getElementById('header-sub');
-const teamPanel    = document.getElementById('team-panel');
-const teamListEl   = document.getElementById('team-list');
-const sessPanel    = document.getElementById('sess-panel');
 const sessListEl   = document.getElementById('sess-list');
 const noSessHint   = document.getElementById('no-session-hint');
 
@@ -342,42 +299,6 @@ function enableInput(on) {
   input.placeholder = on ? '输入消息，Shift+Enter 换行，Enter 发送...' : '选择或新建会话后开始输入...';
 }
 
-// ── Teams ──────────────────────────────────────────
-async function loadTeams() {
-  const res = await fetch('/api/teams').catch(() => null);
-  if (!res) return;
-  const { teams } = await res.json();
-  teamListEl.innerHTML = '';
-  if (!teams.length) {
-    teamListEl.innerHTML = '<div class="empty-hint">暂无团队配置</div>';
-    return;
-  }
-  teams.forEach(t => {
-    const btn = document.createElement('button');
-    btn.className = 'team-item';
-    btn.dataset.id = t.id;
-    btn.innerHTML = `
-      <div class="team-item-name">${t.name}</div>
-      <div class="team-item-desc">${t.description||''}</div>
-      <div class="team-item-badge">👥 ${t.memberCount} members</div>`;
-    btn.onclick = () => selectTeam(t.id, t.name, t.description, btn);
-    teamListEl.appendChild(btn);
-  });
-}
-
-function selectTeam(id, name, desc, el) {
-  document.querySelectorAll('.team-item').forEach(b => b.classList.remove('selected'));
-  el.classList.add('selected');
-  currentTeamId = id; currentTeamName = name;
-  
-  // 显示会话面板
-  sessPanel.classList.add('visible');
-  
-  // 加载该 Team 的会话
-  loadSessions();
-  updateHeader();
-}
-
 // ── Mode tabs ──────────────────────────────────────
 document.querySelectorAll('.mode-tab').forEach(tab => {
   tab.onclick = () => {
@@ -385,38 +306,28 @@ document.querySelectorAll('.mode-tab').forEach(tab => {
     tab.classList.add('active');
     currentMode = tab.dataset.mode;
     
-    // 清除当前会话和选中状态
+    // 清除当前会话
     currentSessionId = null;
     currentTeamId = null;
     currentTeamName = '';
-    document.querySelectorAll('.team-item').forEach(b => b.classList.remove('selected'));
     clearMessages();
     enableInput(false);
     
-    if (currentMode === 'agent') {
-      // Agent 模式：隐藏团队面板，显示会话面板
-      teamPanel.style.display = 'none';
-      sessPanel.classList.add('visible');
-      loadSessions();
-    } else {
-      // Team 模式：显示团队面板，隐藏会话面板
-      teamPanel.style.display = 'flex';
-      sessPanel.classList.remove('visible');
-    }
-    
+    // 重新加载对应模式的会话列表
+    loadSessions();
     updateHeader();
   };
 });
 
 function updateHeader() {
   if (!currentSessionId) {
-    headerTitle.textContent = 'jsClaw Agent';
+    headerTitle.textContent = 'jsClaw ' + (currentMode === 'team' ? 'Team' : 'Agent');
     headerSub.textContent = '新建或选择一个会话开始对话';
     return;
   }
   if (currentMode === 'team') {
-    headerTitle.textContent = currentTeamId ? `Team · ${currentTeamName}` : '请选择团队';
-    headerSub.textContent = currentTeamId ? '' : '从左侧选择一个 Team';
+    headerTitle.textContent = 'Team 模式';
+    headerSub.textContent = currentTeamName || '团队协作会话';
   } else {
     headerTitle.textContent = 'Agent 模式';
     headerSub.textContent = '单个智能助手，保持对话历史';
@@ -426,9 +337,6 @@ function updateHeader() {
 // ── Session list ───────────────────────────────────
 async function loadSessions() {
   const params = new URLSearchParams();
-  if (currentMode === 'team' && currentTeamId) {
-    params.set('teamId', currentTeamId);
-  }
   params.set('mode', currentMode);
   
   const res = await fetch(`/api/sessions?${params}`).catch(() => null);
@@ -526,19 +434,6 @@ async function switchSession(sid) {
   currentMode = data.mode || 'agent';
   currentTeamId = data.teamId || null;
   document.querySelectorAll('.mode-tab').forEach(t => t.classList.toggle('active', t.dataset.mode === currentMode));
-  
-  if (currentMode === 'team') {
-    teamPanel.style.display = 'flex';
-    sessPanel.classList.add('visible');
-    if (currentTeamId) {
-      document.querySelectorAll('.team-item').forEach(el => el.classList.toggle('selected', el.dataset.id === currentTeamId));
-      const sel = document.querySelector(`.team-item[data-id="${currentTeamId}"]`);
-      currentTeamName = sel?.querySelector('.team-item-name')?.textContent || currentTeamId;
-    }
-  } else {
-    teamPanel.style.display = 'none';
-    sessPanel.classList.add('visible');
-  }
 
   updateHeader();
   renderHistory(data.messages || []);
@@ -556,7 +451,6 @@ function renderHistory(messages) {
   noSessHint.style.display = 'none';
 
   if (!messages.length) {
-    // 空会话显示欢迎
     messagesEl.appendChild(buildWelcome());
     return;
   }
@@ -596,7 +490,6 @@ function buildWelcome() {
 
 // ── New session ────────────────────────────────────
 window.newSession = async () => {
-  if (currentMode === 'team' && !currentTeamId) { alert('请先选择一个 Team'); return; }
   const res = await fetch('/api/sessions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -718,7 +611,6 @@ window.toggleBlock = (id) => {
 async function sendMessage() {
   const text = input.value.trim();
   if (!text || isLoading || !currentSessionId) return;
-  if (currentMode === 'team' && !currentTeamId) { alert('请先在左侧选择一个 Team'); return; }
 
   isLoading = true;
   input.value = ''; input.style.height = 'auto';
@@ -797,9 +689,7 @@ sendBtn.onclick = sendMessage;
 window.fillInput = (text) => { input.value = text; input.dispatchEvent(new Event('input')); input.focus(); };
 
 // ── Init ───────────────────────────────────────────
-// 默认 Agent 模式，加载会话列表
 loadSessions();
-loadTeams();
 </script>
 </body>
 </html>
