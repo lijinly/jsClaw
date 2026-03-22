@@ -8,796 +8,871 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg: #0f1117;
-      --surface: #1a1d27;
-      --surface2: #22253a;
-      --surface3: #2a2d42;
-      --border: #2e3148;
-      --accent: #6c63ff;
-      --accent-dim: #3d3880;
-      --text: #e8eaf0;
-      --text-muted: #7b80a0;
-      --text-dim: #4a4f72;
-      --user-bg: #1e2a4a;
-      --agent-bg: #1a1d27;
-      --thinking-bg: #12151f;
-      --tool-bg: #0e1a1a;
-      --tool-border: #1a3535;
-      --green: #4ade80;
-      --yellow: #facc15;
-      --red: #f87171;
-      --radius: 14px;
-      --radius-sm: 8px;
-      --sidebar-w: 280px;
+      /* WorkBuddy 风格配色 */
+      --bg: #ffffff;
+      --surface: #f5f6f8;
+      --surface2: #ffffff;
+      --surface3: #ffffff;
+      --border: #e5e7eb;
+      --border-light: #f0f0f0;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --accent-light: #dbeafe;
+      --text: #1f2937;
+      --text-secondary: #6b7280;
+      --text-muted: #9ca3af;
+      --text-dim: #d1d5db;
+      --green: #10b981;
+      --yellow: #f59e0b;
+      --red: #ef4444;
+      
+      /* 尺寸 */
+      --radius: 8px;
+      --radius-lg: 12px;
+      --sidebar-w: 64px;
+      --list-w: 300px;
+      --header-h: 56px;
     }
 
-    html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); }
+    html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif; background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; }
 
     /* ── Layout ── */
     .app { display: flex; height: 100vh; overflow: hidden; }
 
-    /* ── Sidebar (left) ── */
-    .sidebar {
+    /* ── Left Navigation (narrow, icon-based) ── */
+    .nav {
       width: var(--sidebar-w); min-width: var(--sidebar-w);
       background: var(--surface);
       border-right: 1px solid var(--border);
       display: flex; flex-direction: column;
-      padding: 16px;
-      gap: 16px;
+      align-items: center;
+      padding: 12px 0;
+      gap: 8px;
+      flex-shrink: 0;
     }
 
-    .logo { display: flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 700; letter-spacing: -.5px; margin-bottom: 8px; }
-    .logo-icon { width: 36px; height: 36px; background: var(--accent); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+    .logo {
+      width: 40px; height: 40px;
+      background: var(--accent);
+      border-radius: var(--radius);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px; font-weight: 700;
+      color: #fff;
+      margin-bottom: 12px;
+      flex-shrink: 0;
+    }
 
-    /* Mode tabs */
-    .mode-tabs { display: flex; gap: 8px; }
-    .mode-tab { flex: 1; padding: 10px 0; border-radius: var(--radius-sm); border: 1px solid var(--border); background: transparent; color: var(--text-muted); font-size: 13px; font-weight: 500; cursor: pointer; transition: all .15s; }
-    .mode-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
-    .mode-tab:hover:not(.active) { border-color: var(--accent-dim); color: var(--text); }
+    .nav-item {
+      width: 44px; height: 44px;
+      border-radius: var(--radius);
+      border: none;
+      background: transparent;
+      color: var(--text-secondary);
+      font-size: 18px;
+      cursor: pointer;
+      display: flex; flex-items: center; justify-content: center;
+      transition: all 0.15s;
+    }
+    .nav-item:hover { background: var(--surface2); color: var(--text); }
+    .nav-item.active { background: var(--accent-light); color: var(--accent); }
 
-    /* List container (Team list or Session list) */
-    .list-container { flex: 1; display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg); }
+    .nav-divider {
+      width: 36px; height: 1px;
+      background: var(--border);
+      margin: 8px 0;
+      flex-shrink: 0;
+    }
+
+    .user-avatar {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; font-weight: 600;
+      color: #fff;
+      margin-top: auto;
+      flex-shrink: 0;
+    }
+
+    /* ── List Panel (sessions or teams) ── */
+    .list-panel {
+      width: var(--list-w); min-width: var(--list-w);
+      background: var(--surface2);
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      flex-shrink: 0;
+    }
 
     .list-header {
-      padding: 12px 14px;
+      height: var(--header-h);
+      padding: 0 16px;
       border-bottom: 1px solid var(--border);
       display: flex; align-items: center; justify-content: space-between;
       background: var(--surface2);
+      flex-shrink: 0;
     }
-    .list-header-title { font-size: 13px; font-weight: 600; color: var(--text-muted); }
-    .list-header-back { font-size: 12px; color: var(--accent); cursor: pointer; user-select: none; }
-    .list-header-back:hover { text-decoration: underline; }
 
-    .new-btn {
-      width: 26px; height: 26px; border-radius: 6px;
-      border: 1px solid var(--border); background: transparent;
-      color: var(--text-muted); font-size: 16px; cursor: pointer;
+    .list-title {
+      font-size: 14px; font-weight: 600; color: var(--text);
+    }
+
+    .list-back {
+      font-size: 13px; color: var(--accent);
+      cursor: pointer; user-select: none;
+      display: none; align-items: center; gap: 4px;
+    }
+    .list-back:hover { color: var(--accent-hover); }
+
+    .list-actions { display: flex; gap: 8px; }
+
+    .icon-btn {
+      width: 32px; height: 32px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text-secondary);
+      font-size: 14px;
+      cursor: pointer;
       display: flex; align-items: center; justify-content: center;
-      line-height: 1; transition: all .15s;
+      transition: all 0.15s;
     }
-    .new-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .icon-btn:hover { border-color: var(--accent); color: var(--accent); }
 
-    .list-body { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 4px; }
-    .list-body::-webkit-scrollbar { width: 3px; }
-    .list-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-
-    /* Team items */
-    .team-item { padding: 12px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border); cursor: pointer; transition: all .15s; background: transparent; text-align: left; width: 100%; }
-    .team-item:hover { border-color: var(--accent-dim); background: var(--surface); }
-    .team-item.selected { border-color: var(--accent); background: var(--accent-dim); }
-    .team-item-name { font-size: 14px; font-weight: 600; color: var(--text); }
-    .team-item-desc { font-size: 12px; color: var(--text-muted); margin-top: 4px; line-height: 1.4; }
-    .team-item-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-dim); margin-top: 6px; }
+    .list-body { flex: 1; overflow-y: auto; }
+    .list-body::-webkit-scrollbar { width: 4px; }
+    .list-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 
     /* Session items */
     .sess-item {
-      padding: 10px 10px; border-radius: var(--radius-sm);
-      cursor: pointer; transition: all .15s;
-      border: 1px solid transparent;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border-light);
+      cursor: pointer;
+      transition: all 0.15s;
       position: relative;
     }
-    .sess-item:hover { background: var(--surface); border-color: var(--border); }
-    .sess-item.active { background: var(--surface2); border-color: var(--accent-dim); }
+    .sess-item:hover { background: var(--surface); }
+    .sess-item.active { background: var(--accent-light); border-left: 3px solid var(--accent); padding-left: 13px; }
 
-    .sess-item-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
-    .sess-item-title { font-size: 13px; font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
-
-    .sess-item-preview { font-size: 11px; color: var(--text-dim); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.4; }
-    .sess-item-date { font-size: 10px; color: var(--text-dim); margin-top: 4px; }
-
-    .sess-item-actions {
-      position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
-      display: none; gap: 2px;
+    .sess-title {
+      font-size: 13px; font-weight: 500; color: var(--text);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      margin-bottom: 4px;
     }
-    .sess-item:hover .sess-item-actions { display: flex; }
-    .sess-item.active .sess-item-actions { display: flex; }
+    .sess-item.active .sess-title { color: var(--accent-hover); }
 
-    .sess-action-btn {
-      width: 22px; height: 22px; border-radius: 5px;
-      border: none; background: var(--surface3);
-      color: var(--text-muted); font-size: 12px; cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
-      transition: all .1s;
+    .sess-meta {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 11px; color: var(--text-muted);
     }
-    .sess-action-btn:hover { background: var(--red); color: #fff; }
 
-    .empty-hint { padding: 24px 12px; text-align: center; color: var(--text-dim); font-size: 12px; line-height: 1.6; }
+    .sess-preview {
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      flex: 1;
+    }
 
-    /* ── Main chat area ── */
-    .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+    /* Team items */
+    .team-item {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border-light);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .team-item:hover { background: var(--surface); }
+    .team-item.selected { background: var(--accent-light); border-left: 3px solid var(--accent); padding-left: 13px; }
 
-    .header {
-      padding: 14px 24px; border-bottom: 1px solid var(--border);
+    .team-name {
+      font-size: 14px; font-weight: 600; color: var(--text);
+      margin-bottom: 4px;
+    }
+    .team-item.selected .team-name { color: var(--accent-hover); }
+
+    .team-desc {
+      font-size: 12px; color: var(--text-muted);
+      line-height: 1.4;
+    }
+
+    .team-meta {
+      display: flex; align-items: center; gap: 12px;
+      margin-top: 8px;
+      font-size: 11px; color: var(--text-dim);
+    }
+
+    .team-stat {
+      display: flex; align-items: center; gap: 4px;
+    }
+
+    /* Empty state */
+    .empty {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 48px 24px;
+      color: var(--text-muted);
+      text-align: center;
+    }
+    .empty-icon { font-size: 40px; margin-bottom: 12px; }
+    .empty-text { font-size: 13px; line-height: 1.6; }
+
+    /* ── Main Chat Area ── */
+    .main {
+      flex: 1; display: flex; flex-direction: column;
+      overflow: hidden; min-width: 0;
+    }
+
+    .chat-header {
+      height: var(--header-h);
+      padding: 0 20px;
+      border-bottom: 1px solid var(--border);
       display: flex; align-items: center; justify-content: space-between;
-      background: var(--surface); flex-shrink: 0;
+      background: var(--bg);
+      flex-shrink: 0;
     }
-    .header-title { font-size: 15px; font-weight: 600; }
-    .header-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
-    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 6px var(--green); }
-    .status-dot.thinking { background: var(--yellow); box-shadow: 0 0 6px var(--yellow); animation: pulse 1s infinite; }
-    .status-dot.error { background: var(--red); box-shadow: 0 0 6px var(--red); }
-    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
+
+    .chat-title-group { display: flex; align-items: center; gap: 10px; }
+    .chat-title { font-size: 14px; font-weight: 600; color: var(--text); }
+    .chat-mode-badge {
+      font-size: 11px; padding: 2px 8px;
+      border-radius: 10px;
+      background: var(--accent-light);
+      color: var(--accent);
+      font-weight: 500;
+    }
+    .chat-team-badge {
+      font-size: 11px; padding: 2px 8px;
+      border-radius: 10px;
+      background: var(--surface);
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+
+    .status-indicator {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 12px; color: var(--text-muted);
+    }
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--green);
+    }
+    .status-dot.thinking { background: var(--yellow); animation: pulse 1s infinite; }
+    .status-dot.error { background: var(--red); }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
 
     /* Messages */
-    .messages { flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 20px; }
-    .messages::-webkit-scrollbar { width: 4px; }
-    .messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    .messages {
+      flex: 1; overflow-y: auto;
+      padding: 24px;
+      display: flex; flex-direction: column; gap: 16px;
+    }
+    .messages::-webkit-scrollbar { width: 6px; }
+    .messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 6px; }
 
-    /* Welcome */
-    .welcome { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 16px; color: var(--text-muted); }
-    .welcome-icon { font-size: 48px; }
-    .welcome h2 { font-size: 22px; color: var(--text); }
-    .welcome p { font-size: 14px; text-align: center; max-width: 380px; line-height: 1.6; }
-    .welcome-pills { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-top: 8px; }
-    .welcome-pill { padding: 6px 14px; border-radius: 20px; border: 1px solid var(--border); font-size: 12px; color: var(--text-muted); cursor: pointer; transition: all .15s; }
-    .welcome-pill:hover { border-color: var(--accent); color: var(--text); }
+    /* Welcome screen */
+    .welcome {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      height: 100%; gap: 20px;
+    }
+    .welcome-icon {
+      width: 80px; height: 80px;
+      border-radius: var(--radius-lg);
+      background: var(--accent-light);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 32px; color: var(--accent);
+    }
+    .welcome h2 { font-size: 24px; font-weight: 600; color: var(--text); }
+    .welcome p { font-size: 14px; color: var(--text-secondary); max-width: 360px; text-align: center; line-height: 1.6; }
+    .welcome-tips { display: flex; flex-direction: column; gap: 12px; margin-top: 8px; }
+    .welcome-tip {
+      display: flex; align-items: center; gap: 10px;
+      font-size: 13px; color: var(--text-secondary);
+    }
+    .welcome-tip-icon {
+      width: 24px; height: 24px;
+      border-radius: var(--radius);
+      background: var(--surface);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px;
+    }
 
-    /* Message bubble */
-    .msg { display: flex; gap: 12px; max-width: 820px; width: 100%; }
-    .msg.user { align-self: flex-end; flex-direction: row-reverse; }
-    .msg.assistant { align-self: flex-start; }
+    /* Message bubbles */
+    .msg {
+      display: flex; gap: 12px;
+      animation: msgIn 0.2s ease-out;
+    }
+    @keyframes msgIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
 
-    .avatar { width: 34px; height: 34px; min-width: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 700; }
-    .avatar.user-avatar { background: var(--user-bg); color: var(--accent); }
-    .avatar.bot-avatar { background: var(--accent); color: #fff; }
+    .msg-avatar {
+      width: 32px; height: 32px;
+      border-radius: var(--radius);
+      flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; font-weight: 600;
+    }
+    .msg-avatar.user {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: #fff;
+    }
+    .msg-avatar.agent {
+      background: var(--accent);
+      color: #fff;
+    }
 
-    .bubble-wrap { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-    .bubble { padding: 12px 16px; border-radius: var(--radius); line-height: 1.7; font-size: 14px; white-space: pre-wrap; word-break: break-word; }
-    .bubble.user { background: var(--user-bg); border: 1px solid #2a3a5e; color: var(--text); border-top-right-radius: 4px; }
-    .bubble.assistant { background: var(--agent-bg); border: 1px solid var(--border); color: var(--text); border-top-left-radius: 4px; }
+    .msg-content { flex: 1; min-width: 0; }
+    .msg-role {
+      font-size: 12px; font-weight: 600; color: var(--text-secondary);
+      margin-bottom: 4px;
+    }
+    .msg-text {
+      font-size: 14px; line-height: 1.6; color: var(--text);
+      white-space: pre-wrap;
+    }
 
-    .executor-tag { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-dim); padding: 2px 8px; border-radius: 20px; border: 1px solid var(--border); align-self: flex-start; }
+    /* Thinking block */
+    .thinking {
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 12px 16px;
+      margin-top: 8px;
+      font-size: 13px; color: var(--text-secondary);
+      line-height: 1.5;
+    }
+    .thinking-header {
+      display: flex; align-items: center; gap: 8px;
+      font-weight: 500; margin-bottom: 8px;
+      color: var(--accent);
+    }
 
-    /* Thinking */
-    .thinking-block { border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
-    .thinking-header { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--thinking-bg); cursor: pointer; user-select: none; font-size: 12px; color: var(--text-muted); }
-    .thinking-header:hover { color: var(--text); }
-    .thinking-chevron { transition: transform .2s; font-style: normal; }
-    .thinking-body { padding: 12px 14px; background: var(--thinking-bg); font-size: 12px; color: var(--text-muted); line-height: 1.7; white-space: pre-wrap; word-break: break-word; border-top: 1px solid var(--border); display: none; }
-    .thinking-body.open { display: block; }
-
-    /* Tool calls */
-    .tool-calls { display: flex; flex-direction: column; gap: 6px; }
-    .tool-call { background: var(--tool-bg); border: 1px solid var(--tool-border); border-radius: var(--radius-sm); overflow: hidden; }
-    .tool-call-header { display: flex; align-items: center; gap: 8px; padding: 7px 12px; font-size: 12px; cursor: pointer; }
-    .tool-call-header:hover { background: rgba(255,255,255,.03); }
-    .tool-name { color: var(--green); font-family: monospace; font-weight: 600; }
-    .tool-call-args { padding: 8px 12px; font-family: monospace; font-size: 11px; color: var(--text-muted); background: #080e0e; line-height: 1.6; white-space: pre-wrap; word-break: break-word; border-top: 1px solid var(--tool-border); display: none; }
-    .tool-call-args.open { display: block; }
-
-    /* Status/typing */
-    .status-msg { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-muted); }
-    .dots span { display: inline-block; width: 4px; height: 4px; border-radius: 50%; background: var(--text-dim); animation: bounce 1.2s infinite; }
-    .dots span:nth-child(2) { animation-delay: .2s; }
-    .dots span:nth-child(3) { animation-delay: .4s; }
-    @keyframes bounce { 0%,80%,100% { transform: translateY(0); } 40% { transform: translateY(-6px); } }
-
-    /* Timestamp */
-    .msg-ts { font-size: 10px; color: var(--text-dim); align-self: flex-end; }
+    /* Tool call */
+    .tool {
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 10px 14px;
+      margin-top: 6px;
+      font-size: 12px;
+    }
+    .tool-header {
+      display: flex; align-items: center; gap: 8px;
+      font-weight: 500; margin-bottom: 6px;
+      color: var(--text);
+    }
+    .tool-name {
+      background: var(--accent-light);
+      color: var(--accent);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+    }
+    .tool-result {
+      background: var(--bg);
+      border-radius: var(--radius-sm);
+      padding: 10px;
+      max-height: 200px;
+      overflow-y: auto;
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+    .tool-result::-webkit-scrollbar { width: 4px; }
+    .tool-result::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 
     /* Input area */
-    .input-area { padding: 16px 24px; border-top: 1px solid var(--border); background: var(--surface); flex-shrink: 0; }
-    .input-wrap { display: flex; align-items: flex-end; gap: 10px; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; transition: border-color .15s; }
-    .input-wrap:focus-within { border-color: var(--accent); }
-    #msg-input { flex: 1; background: transparent; border: none; outline: none; color: var(--text); font-size: 14px; resize: none; max-height: 160px; line-height: 1.6; font-family: inherit; }
-    #msg-input::placeholder { color: var(--text-dim); }
-    .send-btn { width: 36px; height: 36px; min-width: 36px; border-radius: 10px; background: var(--accent); border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all .15s; color: #fff; font-size: 16px; }
-    .send-btn:hover { background: #7c73ff; transform: scale(1.05); }
-    .send-btn:disabled { background: var(--border); cursor: not-allowed; transform: none; }
-    .input-hint { font-size: 11px; color: var(--text-dim); margin-top: 8px; text-align: right; }
+    .input-area {
+      padding: 16px 24px 24px;
+      border-top: 1px solid var(--border);
+      background: var(--bg);
+    }
 
-    /* Title edit inline */
-    .sess-item-title[contenteditable="true"] { outline: none; background: var(--surface3); border-radius: 3px; padding: 1px 4px; }
+    .input-wrapper {
+      display: flex; gap: 12px; align-items: flex-end;
+    }
 
-    /* No session state */
-    .no-session { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 14px; color: var(--text-dim); }
-    .no-session p { font-size: 13px; }
-    .no-session-btn { padding: 10px 20px; border-radius: var(--radius-sm); background: var(--accent); border: none; color: #fff; font-size: 14px; cursor: pointer; transition: all .15s; }
-    .no-session-btn:hover { background: #7c73ff; }
+    .mode-select {
+      display: flex; gap: 4px;
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 4px;
+      border: 1px solid var(--border);
+    }
+
+    .mode-option {
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+      border: none;
+      background: transparent;
+      color: var(--text-secondary);
+      font-size: 12px; font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .mode-option:hover { color: var(--text); }
+    .mode-option.active { background: var(--bg); color: var(--accent); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+
+    .input-box {
+      flex: 1;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px 14px;
+      font-size: 14px;
+      color: var(--text);
+      font-family: inherit;
+      resize: none;
+      min-height: 44px;
+      max-height: 120px;
+      transition: all 0.15s;
+    }
+    .input-box:focus {
+      outline: none;
+      border-color: var(--accent);
+      background: var(--bg);
+    }
+    .input-box::placeholder { color: var(--text-muted); }
+
+    .send-btn {
+      width: 44px; height: 44px;
+      border-radius: var(--radius);
+      border: none;
+      background: var(--accent);
+      color: #fff;
+      font-size: 18px;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.15s;
+      flex-shrink: 0;
+    }
+    .send-btn:hover { background: var(--accent-hover); }
+    .send-btn:disabled { background: var(--text-dim); cursor: not-allowed; }
+
+    /* Loading dots */
+    .typing {
+      display: flex; gap: 4px; padding: 8px 0;
+    }
+    .typing-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      animation: typing 1.4s infinite ease-in-out;
+    }
+    .typing-dot:nth-child(1) { animation-delay: 0s; }
+    .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes typing {
+      0%, 60%, 100% { transform: translateY(0); }
+      30% { transform: translateY(-8px); }
+    }
+
+    /* Utility */
+    .hidden { display: none !important; }
   </style>
 </head>
 <body>
-<div class="app">
-
-  <!-- ── Sidebar (left) ── -->
-  <aside class="sidebar">
-    <div class="logo">
-      <div class="logo-icon">🦀</div>
-      jsClaw
+  <div class="app">
+    <!-- Left Navigation -->
+    <div class="nav">
+      <div class="logo">JS</div>
+      <button class="nav-item active" id="nav-chat" title="对话">💬</button>
+      <button class="nav-item" id="nav-teams" title="团队">👥</button>
+      <button class="nav-item" id="nav-agents" title="智能体">🤖</button>
+      <button class="nav-item" id="nav-settings" title="设置">⚙️</button>
+      <div class="nav-divider"></div>
+      <div class="user-avatar">U</div>
     </div>
 
-    <!-- Mode tabs -->
-    <div class="mode-tabs">
-      <button class="mode-tab active" data-mode="agent">Agent</button>
-      <button class="mode-tab" data-mode="team">Team</button>
-    </div>
-
-    <!-- List container (Team list or Session list) -->
-    <div class="list-container">
-      <!-- Team list (shown in Team mode) -->
-      <div id="team-view" style="display: none; flex-direction: column; flex: 1; overflow: hidden;">
-        <div class="list-header">
-          <span class="list-header-title">选择团队</span>
+    <!-- List Panel -->
+    <div class="list-panel" id="listPanel">
+      <!-- Agent/Team mode header -->
+      <div class="list-header">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <button class="icon-btn" id="modeAgent" style="padding: 6px;">🤖</button>
+          <button class="icon-btn" id="modeTeam" style="padding: 6px;">👥</button>
         </div>
-        <div class="list-body" id="team-list">
-          <div class="empty-hint">加载中...</div>
+        <div class="list-actions">
+          <button class="icon-btn" id="newBtn" title="新建对话">➕</button>
+        </div>
+      </div>
+
+      <!-- Back button for team sessions -->
+      <div class="list-header" id="sessionHeader" style="display: none;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <div class="list-back" id="backToTeams">← 返回团队</div>
+        </div>
+        <div class="list-title">会话历史</div>
+        <div class="list-actions">
+          <button class="icon-btn" id="newSessionBtn" title="新建对话">➕</button>
+        </div>
+      </div>
+
+      <!-- Team list -->
+      <div class="list-body" id="teamList">
+        <div class="team-item" data-team="dev">
+          <div class="team-name">开发组</div>
+          <div class="team-desc">前端、后端、DevOps 相关任务</div>
+          <div class="team-meta">
+            <div class="team-stat">📋 <span>12 会话</span></div>
+            <div class="team-stat">👥 <span>4 成员</span></div>
+          </div>
+        </div>
+        <div class="team-item" data-team="research">
+          <div class="team-name">研究组</div>
+          <div class="team-desc">市场调研、竞品分析、行业研究</div>
+          <div class="team-meta">
+            <div class="team-stat">📋 <span>8 会话</span></div>
+            <div class="team-stat">👥 <span>3 成员</span></div>
+          </div>
+        </div>
+        <div class="team-item" data-team="general">
+          <div class="team-name">综合组</div>
+          <div class="team-desc">通用任务、咨询、文档处理</div>
+          <div class="team-meta">
+            <div class="team-stat">📋 <span>5 会话</span></div>
+            <div class="team-stat">👥 <span>2 成员</span></div>
+          </div>
         </div>
       </div>
 
       <!-- Session list -->
-      <div id="session-view" style="display: flex; flex-direction: column; flex: 1; overflow: hidden;">
-        <div class="list-header">
-          <span class="list-header-title">会话历史</span>
-          <span class="list-header-back" id="back-to-teams" style="display: none;">← 返回团队</span>
-          <button class="new-btn" id="new-sess-btn" title="新建会话">+</button>
-        </div>
-        <div class="list-body" id="sess-list">
-          <div class="empty-hint">暂无会话<br>点击 + 新建</div>
+      <div class="list-body hidden" id="sessionList">
+        <div class="empty">
+          <div class="empty-icon">💬</div>
+          <div class="empty-text">暂无会话<br />点击 + 创建新对话</div>
         </div>
       </div>
     </div>
-  </aside>
 
-  <!-- ── Main (right) ── -->
-  <main class="main">
-    <header class="header">
-      <div>
-        <div class="header-title" id="header-title">jsClaw Agent</div>
-        <div class="header-sub" id="header-sub">新建或选择一个会话开始对话</div>
+    <!-- Main Chat Area -->
+    <div class="main">
+      <!-- Header -->
+      <div class="chat-header" id="chatHeader">
+        <div class="chat-title-group">
+          <div class="chat-title" id="chatTitle">jsClaw</div>
+          <span class="chat-mode-badge" id="modeBadge">Agent</span>
+          <span class="chat-team-badge hidden" id="teamBadge">开发组</span>
+        </div>
+        <div class="status-indicator">
+          <div class="status-dot" id="statusDot"></div>
+          <span id="statusText">就绪</span>
+        </div>
       </div>
-      <div class="status-dot" id="status-dot"></div>
-    </header>
 
-    <div class="messages" id="messages">
-      <div class="no-session" id="no-session-hint">
-        <div style="font-size:42px">💬</div>
-        <p>还没有选中任何会话</p>
-        <button class="no-session-btn" onclick="newSession()">新建会话</button>
+      <!-- Messages -->
+      <div class="messages" id="messages">
+        <div class="welcome">
+          <div class="welcome-icon">🚀</div>
+          <h2>欢迎使用 jsClaw</h2>
+          <p>强大的多智能体协作平台</p>
+          <div class="welcome-tips">
+            <div class="welcome-tip">
+              <div class="welcome-tip-icon">🤖</div>
+              <span>选择 Agent 模式进行单智能体对话</span>
+            </div>
+            <div class="welcome-tip">
+              <div class="welcome-tip-icon">👥</div>
+              <span>选择 Team 模式进行团队协作</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Input -->
+      <div class="input-area">
+        <div class="input-wrapper">
+          <div class="mode-select">
+            <button class="mode-option active" data-mode="craft">Craft</button>
+            <button class="mode-option" data-mode="plan">Plan</button>
+            <button class="mode-option" data-mode="ask">Ask</button>
+          </div>
+          <textarea class="input-box" id="input" placeholder="输入消息..." rows="1"></textarea>
+          <button class="send-btn" id="send">➤</button>
+        </div>
       </div>
     </div>
+  </div>
 
-    <div class="input-area">
-      <div class="input-wrap">
-        <textarea id="msg-input" rows="1" placeholder="选择或新建会话后开始输入..." disabled></textarea>
-        <button class="send-btn" id="send-btn" disabled>➤</button>
-      </div>
-      <div class="input-hint">Shift+Enter 换行 · Enter 发送</div>
-    </div>
-  </main>
-</div>
+  <script>
+    // State
+    let state = {
+      mode: 'agent', // 'agent' or 'team'
+      currentTeam: null,
+      currentSession: null,
+      sessions: [],
+      isThinking: false
+    };
 
-<script>
-// ── State ──────────────────────────────────────────
-let currentMode = 'agent';
-let currentTeamId = null;
-let currentTeamName = '';
-let currentSessionId = null;
-let isLoading = false;
-let teamView = false; // 是否在 Team 列表视图
+    // DOM Elements
+    const $ = id => document.getElementById(id);
+    const modeAgent = $('modeAgent');
+    const modeTeam = $('modeTeam');
+    const teamList = $('teamList');
+    const sessionList = $('sessionList');
+    const sessionHeader = $('sessionHeader');
+    const backToTeams = $('backToTeams');
+    const newBtn = $('newBtn');
+    const newSessionBtn = $('newSessionBtn');
+    const messages = $('messages');
+    const input = $('input');
+    const send = $('send');
+    const statusDot = $('statusDot');
+    const statusText = $('statusText');
+    const chatTitle = $('chatTitle');
+    const modeBadge = $('modeBadge');
+    const teamBadge = $('teamBadge');
+    const modeOptions = document.querySelectorAll('.mode-option');
 
-// ── DOM ────────────────────────────────────────────
-const messagesEl   = document.getElementById('messages');
-const input        = document.getElementById('msg-input');
-const sendBtn      = document.getElementById('send-btn');
-const statusDot    = document.getElementById('status-dot');
-const headerTitle  = document.getElementById('header-title');
-const headerSub    = document.getElementById('header-sub');
-const teamViewEl   = document.getElementById('team-view');
-const sessionViewEl = document.getElementById('session-view');
-const teamListEl   = document.getElementById('team-list');
-const sessListEl   = document.getElementById('sess-list');
-const backToTeams  = document.getElementById('back-to-teams');
-const noSessHint   = document.getElementById('no-session-hint');
+    // Mode switch
+    modeAgent.addEventListener('click', () => setMode('agent'));
+    modeTeam.addEventListener('click', () => setMode('team'));
 
-// ── Utils ──────────────────────────────────────────
-function escHtml(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-function fmtTime(ts) {
-  const d = new Date(ts);
-  const now = new Date();
-  const sameDay = d.toDateString() === now.toDateString();
-  if (sameDay) return d.toLocaleTimeString('zh-CN', { hour:'2-digit', minute:'2-digit' });
-  return d.toLocaleDateString('zh-CN', { month:'numeric', day:'numeric' });
-}
-function scrollBottom() { messagesEl.scrollTop = messagesEl.scrollHeight; }
-function setStatus(s) { statusDot.className = 'status-dot' + (s ? ` ${s}` : ''); }
-function enableInput(on) {
-  input.disabled = !on;
-  sendBtn.disabled = !on;
-  input.placeholder = on ? '输入消息，Shift+Enter 换行，Enter 发送...' : '选择或新建会话后开始输入...';
-}
-
-// ── Teams ──────────────────────────────────────────
-async function loadTeams() {
-  const res = await fetch('/api/teams').catch(() => null);
-  if (!res) return;
-  const { teams } = await res.json();
-  teamListEl.innerHTML = '';
-  if (!teams.length) {
-    teamListEl.innerHTML = '<div class="empty-hint">暂无团队配置</div>';
-    return;
-  }
-  teams.forEach(t => {
-    const btn = document.createElement('button');
-    btn.className = 'team-item';
-    btn.dataset.id = t.id;
-    btn.innerHTML = `
-      <div class="team-item-name">${t.name}</div>
-      <div class="team-item-desc">${t.description||''}</div>
-      <div class="team-item-badge">👥 ${t.memberCount} members</div>`;
-    btn.onclick = () => selectTeam(t.id, t.name, t.description);
-    teamListEl.appendChild(btn);
-  });
-}
-
-function selectTeam(id, name, desc) {
-  currentTeamId = id;
-  currentTeamName = name;
-  teamView = false;
-  showSessionView();
-  loadSessions();
-  updateHeader();
-}
-
-function showTeamView() {
-  teamView = true;
-  teamViewEl.style.display = 'flex';
-  sessionViewEl.style.display = 'none';
-  backToTeams.style.display = 'none';
-}
-
-function showSessionView() {
-  teamView = false;
-  teamViewEl.style.display = 'none';
-  sessionViewEl.style.display = 'flex';
-  backToTeams.style.display = currentMode === 'team' ? 'block' : 'none';
-}
-
-// ── Mode tabs ──────────────────────────────────────
-document.querySelectorAll('.mode-tab').forEach(tab => {
-  tab.onclick = () => {
-    document.querySelectorAll('.mode-tab').forEach(t => t.classList.remove('active'));
-    tab.classList.add('active');
-    currentMode = tab.dataset.mode;
-    
-    // 清除当前会话
-    currentSessionId = null;
-    currentTeamId = null;
-    currentTeamName = '';
-    clearMessages();
-    enableInput(false);
-    
-    if (currentMode === 'agent') {
-      // Agent 模式：直接显示会话列表
-      showSessionView();
-      loadSessions();
-    } else {
-      // Team 模式：显示团队列表
-      showTeamView();
-      loadTeams();
-    }
-    
-    updateHeader();
-  };
-});
-
-backToTeams.onclick = () => {
-  showTeamView();
-  currentSessionId = null;
-  currentTeamId = null;
-  currentTeamName = '';
-  clearMessages();
-  enableInput(false);
-  updateHeader();
-};
-
-function updateHeader() {
-  if (!currentSessionId) {
-    headerTitle.textContent = 'jsClaw ' + (currentMode === 'team' ? 'Team' : 'Agent');
-    headerSub.textContent = teamView ? '选择一个团队开始' : '新建或选择一个会话开始对话';
-    return;
-  }
-  if (currentMode === 'team') {
-    headerTitle.textContent = 'Team 模式';
-    headerSub.textContent = currentTeamName || '团队协作会话';
-  } else {
-    headerTitle.textContent = 'Agent 模式';
-    headerSub.textContent = '单个智能助手，保持对话历史';
-  }
-}
-
-// ── Session list ───────────────────────────────────
-async function loadSessions() {
-  const params = new URLSearchParams();
-  params.set('mode', currentMode);
-  if (currentMode === 'team' && currentTeamId) {
-    params.set('teamId', currentTeamId);
-  }
-  
-  const res = await fetch(`/api/sessions?${params}`).catch(() => null);
-  if (!res) return;
-  const { sessions } = await res.json();
-  renderSessionList(sessions);
-}
-
-function renderSessionList(sessions) {
-  if (!sessions.length) {
-    sessListEl.innerHTML = '<div class="empty-hint">暂无会话<br>点击 + 新建</div>';
-    return;
-  }
-  sessListEl.innerHTML = '';
-  sessions.forEach(s => sessListEl.appendChild(buildSessItem(s)));
-}
-
-function buildSessItem(s) {
-  const div = document.createElement('div');
-  div.className = 'sess-item' + (s.id === currentSessionId ? ' active' : '');
-  div.dataset.id = s.id;
-  div.innerHTML = `
-    <div class="sess-item-top">
-      <div class="sess-item-title" title="${escHtml(s.title)}">${escHtml(s.title)}</div>
-    </div>
-    <div class="sess-item-preview">${escHtml(s.preview || '暂无消息')}</div>
-    <div class="sess-item-date">${fmtTime(s.updatedAt)}</div>
-    <div class="sess-item-actions">
-      <button class="sess-action-btn" title="删除会话" onclick="deleteSession(event,'${s.id}')">✕</button>
-    </div>`;
-  div.addEventListener('click', (e) => {
-    if (e.target.closest('.sess-item-actions')) return;
-    switchSession(s.id);
-  });
-  // 双击标题重命名
-  const titleEl = div.querySelector('.sess-item-title');
-  titleEl.addEventListener('dblclick', (e) => {
-    e.stopPropagation();
-    startRename(titleEl, s.id);
-  });
-  return div;
-}
-
-function startRename(el, sid) {
-  el.contentEditable = 'true';
-  el.focus();
-  const range = document.createRange();
-  range.selectNodeContents(el);
-  window.getSelection().removeAllRanges();
-  window.getSelection().addRange(range);
-
-  const finish = async () => {
-    el.contentEditable = 'false';
-    const newTitle = el.textContent.trim() || '新会话';
-    el.textContent = newTitle;
-    await fetch(`/api/sessions/${encodeURIComponent(sid)}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: newTitle }),
-    });
-    await loadSessions();
-  };
-  el.addEventListener('blur', finish, { once: true });
-  el.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); el.blur(); } }, { once: true });
-}
-
-window.deleteSession = async (e, sid) => {
-  e.stopPropagation();
-  await fetch(`/api/sessions/${encodeURIComponent(sid)}`, { method: 'DELETE' });
-  if (currentSessionId === sid) {
-    currentSessionId = null;
-    clearMessages();
-    enableInput(false);
-    updateHeader();
-  }
-  await loadSessions();
-};
-
-// ── Switch / Load session ──────────────────────────
-async function switchSession(sid) {
-  if (currentSessionId === sid) return;
-  currentSessionId = sid;
-
-  // 更新侧边栏高亮
-  document.querySelectorAll('.sess-item').forEach(el => {
-    el.classList.toggle('active', el.dataset.id === sid);
-  });
-
-  // 加载会话消息
-  const res = await fetch(`/api/sessions/${encodeURIComponent(sid)}`);
-  if (!res.ok) return;
-  const data = await res.json();
-
-  // 恢复模式
-  currentMode = data.mode || 'agent';
-  currentTeamId = data.teamId || null;
-  document.querySelectorAll('.mode-tab').forEach(t => t.classList.toggle('active', t.dataset.mode === currentMode));
-
-  if (currentMode === 'team') {
-    showSessionView();
-    backToTeams.style.display = 'block';
-    if (currentTeamId) {
-      const sel = document.querySelector(`.team-item[data-id="${currentTeamId}"]`);
-      currentTeamName = sel?.querySelector('.team-item-name')?.textContent || currentTeamId;
-    }
-  } else {
-    showSessionView();
-  }
-
-  updateHeader();
-  renderHistory(data.messages || []);
-  enableInput(true);
-}
-
-function clearMessages() {
-  messagesEl.innerHTML = '';
-  messagesEl.appendChild(noSessHint);
-  noSessHint.style.display = 'flex';
-}
-
-function renderHistory(messages) {
-  messagesEl.innerHTML = '';
-  noSessHint.style.display = 'none';
-
-  if (!messages.length) {
-    messagesEl.appendChild(buildWelcome());
-    return;
-  }
-
-  messages.forEach(msg => {
-    if (msg.role === 'user') {
-      messagesEl.appendChild(buildUserBubble(msg.content, msg.ts));
-    } else if (msg.role === 'assistant') {
-      const wrap = buildAssistantWrap(msg.ts);
-      if (msg.thinking) renderThinking(wrap, msg.thinking);
-      if (msg.toolCalls?.length) {
-        msg.toolCalls.forEach(tc => renderToolCall(wrap, tc.name, tc.args));
+    function setMode(mode) {
+      state.mode = mode;
+      modeAgent.style.background = mode === 'agent' ? 'var(--accent-light)' : 'transparent';
+      modeAgent.style.color = mode === 'agent' ? 'var(--accent)' : 'var(--text-secondary)';
+      modeTeam.style.background = mode === 'team' ? 'var(--accent-light)' : 'transparent';
+      modeTeam.style.color = mode === 'team' ? 'var(--accent)' : 'var(--text-secondary)';
+      
+      modeBadge.textContent = mode === 'agent' ? 'Agent' : 'Team';
+      
+      if (mode === 'team') {
+        teamList.classList.remove('hidden');
+        sessionList.classList.add('hidden');
+        sessionHeader.style.display = 'none';
+        document.querySelector('.list-header').style.display = 'flex';
+        state.currentTeam = null;
+        teamBadge.classList.add('hidden');
+      } else {
+        teamList.classList.add('hidden');
+        sessionList.classList.remove('hidden');
+        sessionHeader.style.display = 'none';
+        document.querySelector('.list-header').style.display = 'flex';
+        loadSessions();
       }
-      if (msg.content) renderResult(wrap, msg.content, msg.executor);
-      messagesEl.appendChild(wrap.parentElement);
+      
+      chatTitle.textContent = mode === 'agent' ? 'jsClaw - Agent' : 'jsClaw - Team';
     }
-  });
-  scrollBottom();
-}
 
-function buildWelcome() {
-  const div = document.createElement('div');
-  div.className = 'welcome';
-  div.style.height = '100%';
-  div.innerHTML = `
-    <div class="welcome-icon">🦀</div>
-    <h2>开始新对话</h2>
-    <p>当前模式：<strong>${currentMode === 'team' ? '团队协作' : 'Agent 助手'}</strong></p>
-    <div class="welcome-pills">
-      <div class="welcome-pill" onclick="fillInput('你有哪些可用的技能？')">🛠 查看技能</div>
-      <div class="welcome-pill" onclick="fillInput('列出当前目录下的所有文件')">📁 列出文件</div>
-      <div class="welcome-pill" onclick="fillInput('帮我写一段 JavaScript 冒泡排序')">💻 写代码</div>
-      <div class="welcome-pill" onclick="fillInput('帮我搜索一下最新的 AI 资讯')">🔍 搜索信息</div>
-    </div>`;
-  return div;
-}
-
-// ── New session ────────────────────────────────────
-window.newSession = async () => {
-  const res = await fetch('/api/sessions', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ mode: currentMode, teamId: currentTeamId }),
-  });
-  const { session } = await res.json();
-  await loadSessions();
-  switchSession(session.id);
-};
-
-document.getElementById('new-sess-btn').onclick = () => newSession();
-
-// ── Render helpers ─────────────────────────────────
-function buildUserBubble(text, ts) {
-  const div = document.createElement('div');
-  div.className = 'msg user';
-  div.innerHTML = `
-    <div class="avatar user-avatar">U</div>
-    <div class="bubble-wrap">
-      <div class="bubble user">${escHtml(text)}</div>
-      ${ts ? `<div class="msg-ts">${fmtTime(ts)}</div>` : ''}
-    </div>`;
-  return div;
-}
-
-function buildAssistantWrap(ts) {
-  const div = document.createElement('div');
-  div.className = 'msg assistant';
-  div.innerHTML = `
-    <div class="avatar bot-avatar">🦀</div>
-    <div class="bubble-wrap" id="bubble-wrap-cur">
-      <div class="status-msg">
-        <div class="dots"><span></span><span></span><span></span></div>
-        <span class="status-text">思考中...</span>
-      </div>
-    </div>`;
-  const wrap = div.querySelector('#bubble-wrap-cur');
-  wrap.removeAttribute('id');
-  if (ts) {
-    const tsEl = document.createElement('div');
-    tsEl.className = 'msg-ts';
-    tsEl.textContent = fmtTime(ts);
-    wrap._tsEl = tsEl;
-  }
-  return wrap;
-}
-
-function renderThinking(wrap, text) {
-  const id = 'th-' + Date.now() + Math.random().toString(36).slice(2);
-  const block = document.createElement('div');
-  block.className = 'thinking-block';
-  block.innerHTML = `
-    <div class="thinking-header" onclick="toggleBlock('${id}')">
-      <span>💭</span><span>思考过程</span>
-      <span class="thinking-chevron" id="chv-${id}">▶</span>
-    </div>
-    <div class="thinking-body" id="${id}">${escHtml(text)}</div>`;
-  const statusEl = wrap.querySelector('.status-msg');
-  statusEl ? wrap.insertBefore(block, statusEl) : wrap.appendChild(block);
-}
-
-function renderToolCall(wrap, name, args) {
-  let container = wrap.querySelector('.tool-calls');
-  if (!container) {
-    container = document.createElement('div');
-    container.className = 'tool-calls';
-    const statusEl = wrap.querySelector('.status-msg');
-    statusEl ? wrap.insertBefore(container, statusEl) : wrap.appendChild(container);
-  }
-  const id = 'tc-' + Date.now() + Math.random().toString(36).slice(2);
-  let fmt = args;
-  try { fmt = JSON.stringify(JSON.parse(args), null, 2); } catch {}
-  const div = document.createElement('div');
-  div.className = 'tool-call';
-  div.innerHTML = `
-    <div class="tool-call-header" onclick="toggleBlock('${id}')">
-      <span>⚙️</span><span class="tool-name">${escHtml(name)}</span>
-      <span style="color:var(--text-dim);font-size:11px;margin-left:auto">点击展开</span>
-    </div>
-    <div class="tool-call-args" id="${id}">${escHtml(fmt)}</div>`;
-  container.appendChild(div);
-}
-
-function renderResult(wrap, text, executor) {
-  wrap.querySelector('.status-msg')?.remove();
-  const bubble = document.createElement('div');
-  bubble.className = 'bubble assistant';
-  bubble.textContent = text;
-  wrap.appendChild(bubble);
-  if (executor) {
-    const tag = document.createElement('div');
-    tag.className = 'executor-tag';
-    tag.innerHTML = `<span>⚡</span> ${escHtml(executor)}`;
-    wrap.appendChild(tag);
-  }
-  if (wrap._tsEl) wrap.appendChild(wrap._tsEl);
-  scrollBottom();
-}
-
-function renderError(wrap, text) {
-  wrap.querySelector('.status-msg')?.remove();
-  const div = document.createElement('div');
-  div.className = 'bubble assistant';
-  div.style.borderColor = 'var(--red)';
-  div.style.color = 'var(--red)';
-  div.textContent = '⚠️ ' + text;
-  wrap.appendChild(div);
-  scrollBottom();
-}
-
-window.toggleBlock = (id) => {
-  const el = document.getElementById(id);
-  el.classList.toggle('open');
-  const chv = document.getElementById('chv-' + id);
-  if (chv) chv.textContent = el.classList.contains('open') ? '▼' : '▶';
-};
-
-// ── Send message ───────────────────────────────────
-async function sendMessage() {
-  const text = input.value.trim();
-  if (!text || isLoading || !currentSessionId) return;
-
-  isLoading = true;
-  input.value = ''; input.style.height = 'auto';
-  sendBtn.disabled = true; setStatus('thinking');
-
-  // Remove welcome if present
-  const wlc = messagesEl.querySelector('.welcome');
-  if (wlc) wlc.remove();
-
-  messagesEl.appendChild(buildUserBubble(text, Date.now()));
-  const wrap = buildAssistantWrap(Date.now());
-  const msgDiv = wrap.parentElement;
-  messagesEl.appendChild(msgDiv);
-  scrollBottom();
-
-  try {
-    const res = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: text, mode: currentMode, teamId: currentTeamId, sessionId: currentSessionId }),
+    // Team selection
+    teamList.addEventListener('click', (e) => {
+      const item = e.target.closest('.team-item');
+      if (!item) return;
+      
+      const teamId = item.dataset.team;
+      selectTeam(teamId, item.querySelector('.team-name').textContent);
     });
 
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buf = '';
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
-      const lines = buf.split('\n');
-      buf = lines.pop();
-      let ev = null;
-      for (const line of lines) {
-        if (line.startsWith('event: ')) ev = line.slice(7).trim();
-        else if (line.startsWith('data: ') && ev) {
-          try {
-            const d = JSON.parse(line.slice(6));
-            handleSSE(ev, d, wrap);
-          } catch {}
-          ev = null;
-        }
-      }
+    function selectTeam(teamId, teamName) {
+      state.currentTeam = { id: teamId, name: teamName };
+      
+      // Highlight selected
+      document.querySelectorAll('.team-item').forEach(el => el.classList.remove('selected'));
+      teamList.querySelector(`[data-team="${teamId}"]`).classList.add('selected');
+      
+      // Show sessions
+      teamList.classList.add('hidden');
+      sessionList.classList.remove('hidden');
+      sessionHeader.style.display = 'flex';
+      document.querySelector('.list-header').style.display = 'none';
+      
+      // Update header
+      teamBadge.textContent = teamName;
+      teamBadge.classList.remove('hidden');
+      chatTitle.textContent = `jsClaw - ${teamName}`;
+      
+      loadSessions(teamId);
     }
-  } catch (e) {
-    renderError(wrap, e.message || '连接失败');
-  } finally {
-    isLoading = false; sendBtn.disabled = false; setStatus('');
-    // 刷新会话列表
-    await loadSessions();
-    document.querySelectorAll('.sess-item').forEach(el => el.classList.toggle('active', el.dataset.id === currentSessionId));
-  }
-}
 
-function handleSSE(event, data, wrap) {
-  switch (event) {
-    case 'status':
-      const st = wrap.querySelector('.status-text');
-      if (st) st.textContent = data.text;
-      break;
-    case 'thinking': renderThinking(wrap, data.text); break;
-    case 'tool_call': renderToolCall(wrap, data.name, data.args); break;
-    case 'result':   renderResult(wrap, data.text, data.executor); break;
-    case 'error':    renderError(wrap, data.text); break;
-  }
-}
+    // Back to teams
+    backToTeams.addEventListener('click', () => {
+      state.currentTeam = null;
+      teamList.classList.remove('hidden');
+      sessionList.classList.add('hidden');
+      sessionHeader.style.display = 'none';
+      document.querySelector('.list-header').style.display = 'flex';
+      teamBadge.classList.add('hidden');
+      chatTitle.textContent = 'jsClaw - Team';
+    });
 
-// ── Input resize & shortcut ────────────────────────
-input.addEventListener('input', () => {
-  input.style.height = 'auto';
-  input.style.height = Math.min(input.scrollHeight, 160) + 'px';
-});
-input.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
-sendBtn.onclick = sendMessage;
+    // Load sessions
+    async function loadSessions(teamId = null) {
+      const filter = teamId ? `?mode=team&teamId=${teamId}` : '?mode=agent';
+      const res = await fetch(`/api/sessions${filter}`);
+      const { sessions } = await res.json();
+      
+      state.sessions = sessions;
+      renderSessions(sessions);
+    }
 
-window.fillInput = (text) => { input.value = text; input.dispatchEvent(new Event('input')); input.focus(); };
+    function renderSessions(sessions) {
+      if (sessions.length === 0) {
+        sessionList.innerHTML = `
+          <div class="empty">
+            <div class="empty-icon">💬</div>
+            <div class="empty-text">暂无会话<br />点击 + 创建新对话</div>
+          </div>
+        `;
+        return;
+      }
+      
+      sessionList.innerHTML = sessions.map(s => {
+        const time = new Date(s.updatedAt).toLocaleDateString('zh-CN');
+        return `
+          <div class="sess-item ${s.id === state.currentSession?.id ? 'active' : ''}" data-id="${s.id}">
+            <div class="sess-title">${s.title || '新对话'}</div>
+            <div class="sess-meta">
+              <span class="sess-preview">${s.preview || '暂无消息'}</span>
+              <span>${time}</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+      
+      // Click handlers
+      sessionList.querySelectorAll('.sess-item').forEach(el => {
+        el.addEventListener('click', () => loadSession(el.dataset.id));
+      });
+    }
 
-// ── Init ───────────────────────────────────────────
-// 默认 Agent 模式，加载会话列表
-loadSessions();
-</script>
+    // Load session
+    async function loadSession(sessionId) {
+      const res = await fetch(`/api/sessions/${sessionId}`);
+      const session = await res.json();
+      
+      state.currentSession = session;
+      
+      // Highlight
+      sessionList.querySelectorAll('.sess-item').forEach(el => el.classList.remove('active'));
+      sessionList.querySelector(`[data-id="${sessionId}"]`)?.classList.add('active');
+      
+      // Update header
+      chatTitle.textContent = session.title || '新对话';
+      
+      // Render messages
+      renderMessages(session.messages);
+    }
+
+    function renderMessages(msgs) {
+      if (!msgs || msgs.length === 0) {
+        messages.innerHTML = `
+          <div class="welcome">
+            <div class="welcome-icon">💬</div>
+            <h2>开始对话</h2>
+            <p>在下方输入消息开始新的对话</p>
+          </div>
+        `;
+        return;
+      }
+      
+      messages.innerHTML = msgs.map(m => `
+        <div class="msg">
+          <div class="msg-avatar ${m.role}">${m.role === 'user' ? 'U' : 'AI'}</div>
+          <div class="msg-content">
+            <div class="msg-role">${m.role === 'user' ? '你' : 'AI'}</div>
+            <div class="msg-text">${escapeHtml(m.content)}</div>
+          </div>
+        </div>
+      `).join('');
+      
+      messages.scrollTop = messages.scrollHeight;
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // New session
+    newBtn.addEventListener('click', () => createSession());
+    newSessionBtn.addEventListener('click', () => createSession());
+
+    async function createSession() {
+      const teamId = state.currentTeam?.id;
+      const res = await fetch('/api/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: state.mode,
+          teamId: teamId
+        })
+      });
+      const session = await res.json();
+      
+      state.currentSession = session;
+      await loadSessions(teamId);
+      await loadSession(session.id);
+    }
+
+    // Send message
+    send.addEventListener('click', sendMessage);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    async function sendMessage() {
+      const text = input.value.trim();
+      if (!text || state.isThinking) return;
+      
+      input.value = '';
+      input.style.height = 'auto';
+      
+      // Add user message
+      if (!state.currentSession) {
+        await createSession();
+      }
+      
+      await fetch(`/api/sessions/${state.currentSession.id}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: 'user', content: text })
+      });
+      
+      await loadSession(state.currentSession.id);
+      
+      // Show typing
+      setStatus('thinking', 'AI 思考中...');
+      
+      // Simulate response
+      setTimeout(async () => {
+        const res = await fetch(`/api/sessions/${state.currentSession.id}/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            role: 'assistant', 
+            content: `收到: ${text}\n\n这是一个模拟响应。实际使用时需要连接到 AI 服务。` 
+          })
+        });
+        
+        await loadSession(state.currentSession.id);
+        await loadSessions(state.currentTeam?.id);
+        setStatus('ready', '就绪');
+      }, 1000);
+    }
+
+    function setStatus(status, text) {
+      statusDot.className = `status-dot ${status === 'thinking' ? 'thinking' : status === 'error' ? 'error' : ''}`;
+      statusText.textContent = text;
+    }
+
+    // Mode options
+    modeOptions.forEach(opt => {
+      opt.addEventListener('click', () => {
+        modeOptions.forEach(o => o.classList.remove('active'));
+        opt.classList.add('active');
+      });
+    });
+
+    // Auto-resize textarea
+    input.addEventListener('input', () => {
+      input.style.height = 'auto';
+      input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+    });
+
+    // Init
+    setMode('agent');
+  </script>
 </body>
 </html>
