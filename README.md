@@ -645,10 +645,17 @@ npm run skill:installed           # 查看已安装
 
 ## 📖 详细文档
 
+### 用户文档
 - [WORKSPACE.md](./WORKSPACE.md) - WorkSpace 使用文档
 - [TEAM.md](./TEAM.md) - Team 使用文档
 - [AGENT_OO_REFACTORING.md](./AGENT_OO_REFACTORING.md) - Agent 面向对象重构文档
 - [API_KEY_SETUP_GUIDE.md](./API_KEY_SETUP_GUIDE.md) - API Key 配置指南
+
+### 开发文档
+- [DEVELOPMENT.md](./DEVELOPMENT.md) - 开发规范（代码风格、Git 提交、项目架构）
+- [CHANGELOG.md](./CHANGELOG.md) - 版本变更日志
+
+### 其他
 - [GIT_UTF8_CONFIG.md](./GIT_UTF8_CONFIG.md) - Git 中文编码配置指南
 
 ---

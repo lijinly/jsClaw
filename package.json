@@ -11,7 +11,10 @@
     "skill:info": "node src/marketplace.js info",
     "skill:install": "node src/marketplace.js install",
     "skill:remove": "node src/marketplace.js remove",
-    "skill:installed": "node src/marketplace.js installed"
+    "skill:installed": "node src/marketplace.js installed",
+    "lint": "echo 'Lint script to be added'",
+    "test": "echo 'Test script to be added'",
+    "format": "echo 'Format script to be added'"
   },
   "dependencies": {
     "adm-zip": "^0.5.16",
