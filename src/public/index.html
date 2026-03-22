@@ -55,16 +55,18 @@
     .mode-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
     .mode-tab:hover:not(.active) { border-color: var(--accent-dim); color: var(--text); }
 
-    /* Session list container */
-    .sess-container { flex: 1; display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg); }
+    /* List container (Team list or Session list) */
+    .list-container { flex: 1; display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg); }
 
-    .sess-header {
+    .list-header {
       padding: 12px 14px;
       border-bottom: 1px solid var(--border);
       display: flex; align-items: center; justify-content: space-between;
       background: var(--surface2);
     }
-    .sess-header-title { font-size: 13px; font-weight: 600; color: var(--text-muted); }
+    .list-header-title { font-size: 13px; font-weight: 600; color: var(--text-muted); }
+    .list-header-back { font-size: 12px; color: var(--accent); cursor: pointer; user-select: none; }
+    .list-header-back:hover { text-decoration: underline; }
 
     .new-btn {
       width: 26px; height: 26px; border-radius: 6px;
@@ -75,9 +77,17 @@
     }
     .new-btn:hover { border-color: var(--accent); color: var(--accent); }
 
-    .sess-list { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 4px; }
-    .sess-list::-webkit-scrollbar { width: 3px; }
-    .sess-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    .list-body { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 4px; }
+    .list-body::-webkit-scrollbar { width: 3px; }
+    .list-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    /* Team items */
+    .team-item { padding: 12px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border); cursor: pointer; transition: all .15s; background: transparent; text-align: left; width: 100%; }
+    .team-item:hover { border-color: var(--accent-dim); background: var(--surface); }
+    .team-item.selected { border-color: var(--accent); background: var(--accent-dim); }
+    .team-item-name { font-size: 14px; font-weight: 600; color: var(--text); }
+    .team-item-desc { font-size: 12px; color: var(--text-muted); margin-top: 4px; line-height: 1.4; }
+    .team-item-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-dim); margin-top: 6px; }
 
     /* Session items */
     .sess-item {
@@ -222,14 +232,28 @@
       <button class="mode-tab" data-mode="team">Team</button>
     </div>
 
-    <!-- Session list -->
-    <div class="sess-container">
-      <div class="sess-header">
-        <span class="sess-header-title">会话历史</span>
-        <button class="new-btn" id="new-sess-btn" title="新建会话">+</button>
+    <!-- List container (Team list or Session list) -->
+    <div class="list-container">
+      <!-- Team list (shown in Team mode) -->
+      <div id="team-view" style="display: none; flex-direction: column; flex: 1; overflow: hidden;">
+        <div class="list-header">
+          <span class="list-header-title">选择团队</span>
+        </div>
+        <div class="list-body" id="team-list">
+          <div class="empty-hint">加载中...</div>
+        </div>
       </div>
-      <div class="sess-list" id="sess-list">
-        <div class="empty-hint">暂无会话<br>点击 + 新建</div>
+
+      <!-- Session list -->
+      <div id="session-view" style="display: flex; flex-direction: column; flex: 1; overflow: hidden;">
+        <div class="list-header">
+          <span class="list-header-title">会话历史</span>
+          <span class="list-header-back" id="back-to-teams" style="display: none;">← 返回团队</span>
+          <button class="new-btn" id="new-sess-btn" title="新建会话">+</button>
+        </div>
+        <div class="list-body" id="sess-list">
+          <div class="empty-hint">暂无会话<br>点击 + 新建</div>
+        </div>
       </div>
     </div>
   </aside>
@@ -269,6 +293,7 @@ let currentTeamId = null;
 let currentTeamName = '';
 let currentSessionId = null;
 let isLoading = false;
+let teamView = false; // 是否在 Team 列表视图
 
 // ── DOM ────────────────────────────────────────────
 const messagesEl   = document.getElementById('messages');
@@ -277,7 +302,11 @@ const sendBtn      = document.getElementById('send-btn');
 const statusDot    = document.getElementById('status-dot');
 const headerTitle  = document.getElementById('header-title');
 const headerSub    = document.getElementById('header-sub');
+const teamViewEl   = document.getElementById('team-view');
+const sessionViewEl = document.getElementById('session-view');
+const teamListEl   = document.getElementById('team-list');
 const sessListEl   = document.getElementById('sess-list');
+const backToTeams  = document.getElementById('back-to-teams');
 const noSessHint   = document.getElementById('no-session-hint');
 
 // ── Utils ──────────────────────────────────────────
@@ -299,6 +328,52 @@ function enableInput(on) {
   input.placeholder = on ? '输入消息，Shift+Enter 换行，Enter 发送...' : '选择或新建会话后开始输入...';
 }
 
+// ── Teams ──────────────────────────────────────────
+async function loadTeams() {
+  const res = await fetch('/api/teams').catch(() => null);
+  if (!res) return;
+  const { teams } = await res.json();
+  teamListEl.innerHTML = '';
+  if (!teams.length) {
+    teamListEl.innerHTML = '<div class="empty-hint">暂无团队配置</div>';
+    return;
+  }
+  teams.forEach(t => {
+    const btn = document.createElement('button');
+    btn.className = 'team-item';
+    btn.dataset.id = t.id;
+    btn.innerHTML = `
+      <div class="team-item-name">${t.name}</div>
+      <div class="team-item-desc">${t.description||''}</div>
+      <div class="team-item-badge">👥 ${t.memberCount} members</div>`;
+    btn.onclick = () => selectTeam(t.id, t.name, t.description);
+    teamListEl.appendChild(btn);
+  });
+}
+
+function selectTeam(id, name, desc) {
+  currentTeamId = id;
+  currentTeamName = name;
+  teamView = false;
+  showSessionView();
+  loadSessions();
+  updateHeader();
+}
+
+function showTeamView() {
+  teamView = true;
+  teamViewEl.style.display = 'flex';
+  sessionViewEl.style.display = 'none';
+  backToTeams.style.display = 'none';
+}
+
+function showSessionView() {
+  teamView = false;
+  teamViewEl.style.display = 'none';
+  sessionViewEl.style.display = 'flex';
+  backToTeams.style.display = currentMode === 'team' ? 'block' : 'none';
+}
+
 // ── Mode tabs ──────────────────────────────────────
 document.querySelectorAll('.mode-tab').forEach(tab => {
   tab.onclick = () => {
@@ -313,16 +388,34 @@ document.querySelectorAll('.mode-tab').forEach(tab => {
     clearMessages();
     enableInput(false);
     
-    // 重新加载对应模式的会话列表
-    loadSessions();
+    if (currentMode === 'agent') {
+      // Agent 模式：直接显示会话列表
+      showSessionView();
+      loadSessions();
+    } else {
+      // Team 模式：显示团队列表
+      showTeamView();
+      loadTeams();
+    }
+    
     updateHeader();
   };
 });
 
+backToTeams.onclick = () => {
+  showTeamView();
+  currentSessionId = null;
+  currentTeamId = null;
+  currentTeamName = '';
+  clearMessages();
+  enableInput(false);
+  updateHeader();
+};
+
 function updateHeader() {
   if (!currentSessionId) {
     headerTitle.textContent = 'jsClaw ' + (currentMode === 'team' ? 'Team' : 'Agent');
-    headerSub.textContent = '新建或选择一个会话开始对话';
+    headerSub.textContent = teamView ? '选择一个团队开始' : '新建或选择一个会话开始对话';
     return;
   }
   if (currentMode === 'team') {
@@ -338,6 +431,9 @@ function updateHeader() {
 async function loadSessions() {
   const params = new URLSearchParams();
   params.set('mode', currentMode);
+  if (currentMode === 'team' && currentTeamId) {
+    params.set('teamId', currentTeamId);
+  }
   
   const res = await fetch(`/api/sessions?${params}`).catch(() => null);
   if (!res) return;
@@ -434,6 +530,17 @@ async function switchSession(sid) {
   currentMode = data.mode || 'agent';
   currentTeamId = data.teamId || null;
   document.querySelectorAll('.mode-tab').forEach(t => t.classList.toggle('active', t.dataset.mode === currentMode));
+
+  if (currentMode === 'team') {
+    showSessionView();
+    backToTeams.style.display = 'block';
+    if (currentTeamId) {
+      const sel = document.querySelector(`.team-item[data-id="${currentTeamId}"]`);
+      currentTeamName = sel?.querySelector('.team-item-name')?.textContent || currentTeamId;
+    }
+  } else {
+    showSessionView();
+  }
 
   updateHeader();
   renderHistory(data.messages || []);
@@ -689,6 +796,7 @@ sendBtn.onclick = sendMessage;
 window.fillInput = (text) => { input.value = text; input.dispatchEvent(new Event('input')); input.focus(); };
 
 // ── Init ───────────────────────────────────────────
+// 默认 Agent 模式，加载会话列表
 loadSessions();
 </script>
 </body>
