@@ -58,9 +58,19 @@ function autoTitle(text) {
   return text.length > 20 ? text.slice(0, 20) + '…' : text;
 }
 
-// 会话列表（按更新时间降序）
-function listSessions() {
-  return Array.from(sessions.values())
+// 会话列表（按更新时间降序），支持按 mode 和 teamId 过滤
+function listSessions(filters = {}) {
+  let list = Array.from(sessions.values());
+  
+  // 过滤
+  if (filters.mode) {
+    list = list.filter(s => s.mode === filters.mode);
+  }
+  if (filters.teamId) {
+    list = list.filter(s => s.teamId === filters.teamId);
+  }
+  
+  return list
     .sort((a, b) => b.updatedAt - a.updatedAt)
     .map(s => ({
       id: s.id,
@@ -128,9 +138,12 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // ── GET /api/sessions —— 会话列表 ────────────
+  // ── GET /api/sessions —— 会话列表（支持 ?mode=agent|team&teamId=xxx 过滤）──
   if (req.method === 'GET' && pathname === '/api/sessions') {
-    json(res, { sessions: listSessions() });
+    const filters = {};
+    if (url.searchParams.has('mode')) filters.mode = url.searchParams.get('mode');
+    if (url.searchParams.has('teamId')) filters.teamId = url.searchParams.get('teamId');
+    json(res, { sessions: listSessions(filters) });
     return;
   }
 
