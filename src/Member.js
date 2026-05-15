@@ -38,17 +38,17 @@ export class Member extends Agent {
     // 合并配置，提供默认值
     const mergedConfig = {
       name: config.name || `Member(${id})`,
-      role: config.identity || '成员',  // identity 作为 role
+      identity: config.identity || '成员',  // 统一使用 identity
       verbose: config.verbose || false,
       maxRounds: config.maxRounds || 10,
     };
 
-    // 先调用父类构造函数
+    // 先调用父类构造函数（会设置 this.identity）
     super(mergedConfig);
 
     // Member 特有属性
     this.id = id;
-    this.identity = config.identity || '';   // 身份描述
+    // identity 已由父类 Agent 构造函数设置（mergedConfig.identity）
     this.soul = config.soul || '';           // 性格描述
     this.roleSkills = config.skills || [];   // 角色技能
 
@@ -346,7 +346,7 @@ ${thinking}
     return {
       id: this.id,
       name: this.name,
-      role: this.identity,
+      identity: this.identity,
       skillCount: this.allSkills.length,
       skills: this.allSkills,
       taskCount: this.taskCount,
@@ -362,7 +362,7 @@ ${thinking}
     return {
       id: this.id,
       name: this.name,
-      role: this.identity,
+      identity: this.identity,
       skillCount: this.allSkills.length,
     };
   }

@@ -17,14 +17,14 @@ const __dirname = dirname(__filename);
  *
  * 架构设计：
  * - WorkSpace 直接管理多个 Member
- * - 默认有一个 defaultMember 作为管理者和执行者
- * - 多个 Member 可在管理者协调下并行/协作工作
+ * - 初始化时自动创建默认 Manager（协调者/执行者）
+ * - 多个 Member 可在 Manager 协调下并行/协作工作
  * - 自动加载工作空间记忆到 system prompt
  *
  * 职责：
  * 1. 管理 Members 的生命周期
  * 2. 协调多个 Member 执行任务
- * 3. 默认使用 defaultMember 执行简单任务
+ * 3. 默认使用 default Manager 执行任务
  * 4. 复杂任务可分发给多个 Member 协作
  * 5. 管理工作空间记忆
  */
@@ -54,9 +54,6 @@ export class WorkSpace {
     // 当前活跃 Member（执行任务的 Member）
     this.activeMemberId = null;
 
-    // 配置
-    this.config = null;
-
     // 工作空间记忆
     this.memory = null;
     this.memoryDir = null;
@@ -83,15 +80,11 @@ export class WorkSpace {
       for (const memberConfig of membersFromConfig) {
         await this.addMember(memberConfig);
       }
-    } else {
-      // 降级：使用旧的配置文件方式
-      this.config = this.loadConfig();
-      await this.createDefaultMember();
-      if (this.config?.members) {
-        for (const memberConfig of Object.values(this.config.members)) {
-          await this.addMember(memberConfig);
-        }
-      }
+    }
+    
+    // 如果没有成员配置，创建默认 Manager
+    if (this.members.size === 0) {
+      await this.createDefaultManager();
     }
 
     console.log('─'.repeat(50));
@@ -167,25 +160,36 @@ export class WorkSpace {
   }
 
   /**
-   * 创建默认 Member（管理者/执行者）
+   * 创建默认 Manager（协调者/执行者）
+   * 每个 WorkSpace 初始化时自动创建一个默认 Manager
    */
-  async createDefaultMember() {
+  async createDefaultManager() {
     const defaultConfig = this.config?.defaultMember || {
       id: 'default',
-      name: '管理者',
-      identity: '工作空间管理者和执行者',
+      name: '协调者',
+      identity: '任务协调者和执行者',
+      soul: '高效严谨，善于规划',
       skills: [],
     };
 
-    this.defaultMember = new Member(defaultConfig.id, {
-      identity: defaultConfig.identity || defaultConfig.role || '管理者',
-      soul: defaultConfig.soul || '',
-      skills: defaultConfig.skills || [],
-      name: defaultConfig.name,
+    const manager = new Manager({
+      id: defaultConfig.id,
+      config: {
+        name: defaultConfig.name || '协调者',
+        identity: defaultConfig.identity || '任务协调者和执行者',
+        soul: defaultConfig.soul || '高效严谨，善于规划',
+        skills: defaultConfig.skills || [],
+        maxRounds: defaultConfig.maxRounds || 10,
+      },
+      workspace: this,
+      managerConfig: defaultConfig.managerConfig || {},
     });
 
-    this.members.set(defaultConfig.id, this.defaultMember);
-    console.log(`✓ 默认 Member 创建: ${this.defaultMember.name} (${this.defaultMember.id})`);
+    this.members.set(defaultConfig.id, manager);
+    this.defaultMember = manager;  // 保持兼容，指向同一个 Manager
+    console.log(`✓ 默认 Manager 创建: ${manager.name} (${manager.id})`);
+    
+    return manager;
   }
 
   /**
@@ -291,7 +295,7 @@ export class WorkSpace {
    * 任务路由逻辑：
    * - 指定 memberId → 交给指定 Member
    * - 指定 memberIds → 多个 Member 协作
-   * - 不指定 → 交给 defaultMember（默认）
+   * - 不指定 → 交给 default Manager（默认）
    *
    * @param {object|string} task - 任务对象或任务描述
    * @param {string} [task.description] - 任务描述

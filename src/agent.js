@@ -22,7 +22,7 @@ export class Agent {
    * 创建 Agent 实例
    * @param {object} options
    * @param {string} [options.name='Agent']         - Agent 名称
-   * @param {string} [options.role='智能助手']     - Agent 角色描述
+   * @param {string} [options.identity='智能助手'] - Agent 身份描述
    * @param {boolean} [options.verbose=false]       - 是否打印详细日志
    * @param {number}  [options.maxRounds=5]         - Act 阶段最大轮次
    * @param {object}  [options.contextManager]     - ContextManager配置
@@ -30,14 +30,14 @@ export class Agent {
    */
   constructor({
     name = 'Agent',
-    role = '智能助手',
+    identity = '智能助手',
     verbose = false,
     maxRounds = 5,
     contextManager: contextConfig = {},
     goalTracker: goalConfig = {},
   } = {}) {
     this.name = name;
-    this.role = role;
+    this.identity = identity;
     this.verbose = verbose;
     this.maxRounds = maxRounds;
 
@@ -80,7 +80,7 @@ export class Agent {
     }
 
     // 注入目标上下文
-    let enhancedSystemPrompt = systemPrompt || `你是${this.role}。`;
+    let enhancedSystemPrompt = systemPrompt || `你是${this.identity}。`;
     if (injectGoal) {
       const goalContext = this.goalTracker.getGoalContext(goalId);
       enhancedSystemPrompt = `${enhancedSystemPrompt}\n\n${goalContext}`;
@@ -114,7 +114,7 @@ export class Agent {
    * @private
    */
   async _think(userMessage, { systemPrompt, history }) {
-    const thinkSystemPrompt = `${systemPrompt || `你是${this.role}。`}
+    const thinkSystemPrompt = `${systemPrompt || `你是${this.identity}。`}
 
 请按以下步骤思考：
 1. 理解用户的问题
@@ -145,7 +145,7 @@ export class Agent {
    * @private
    */
   async _act(userMessage, { systemPrompt, history, thinking, tools }) {
-    const actSystemPrompt = `${systemPrompt || `你是${this.role}。`}
+    const actSystemPrompt = `${systemPrompt || `你是${this.identity}。`}
 
 用户问题：${userMessage}
 
@@ -212,10 +212,17 @@ ${thinking}
   }
 
   /**
-   * 设置 Agent 角色描述
+   * 设置 Agent 身份描述
    */
-  setRole(role) {
-    this.role = role;
+  setIdentity(identity) {
+    this.identity = identity;
+  }
+
+  /**
+   * 获取当前身份描述
+   */
+  getIdentity() {
+    return this.identity;
   }
 
   /**
