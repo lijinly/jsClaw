@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────
 //  SystemConfig —— 系统配置加载器
 // ─────────────────────────────────────────────
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync, mkdirSync } from 'fs';
 import { join, dirname, resolve, isAbsolute } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -109,6 +109,7 @@ export class SystemConfig {
         name: workspaceMeta.name || id,
         description: workspaceMeta.description || '',
         configPath: workspaceMeta.configPath || null,
+        path: workspaceMeta.path || null,
         members: {}
       };
 
@@ -122,6 +123,10 @@ export class SystemConfig {
             if (workspaceConfig.members) {
               workspace.members = workspaceConfig.members;
             }
+            // 使用配置文件中的 path（如果存在）
+            if (workspaceConfig.path) {
+              workspace.path = workspaceConfig.path;
+            }
             console.log(`✓ Workspace 配置加载: ${workspace.name}`);
           } catch (error) {
             console.warn(`⚠️ Workspace 配置加载失败: ${error.message}`);
@@ -129,8 +134,60 @@ export class SystemConfig {
         }
       }
 
+      // 确保 workspace 目录和 .memory 文件夹存在
+      this._ensureWorkspaceDirs(workspace);
+
       this.workspaces[id] = workspace;
     }
+  }
+
+  /**
+   * 确保 workspace 目录和 .memory 文件夹存在
+   * @private
+   */
+  _ensureWorkspaceDirs(workspace) {
+    if (!workspace.path) return;
+
+    const workspacePath = this._resolvePath(workspace.path);
+    const memoryPath = join(workspacePath, '.memory');
+
+    try {
+      // 创建 workspace 目录
+      if (!existsSync(workspacePath)) {
+        mkdirSync(workspacePath, { recursive: true });
+        console.log(`✓ 创建 workspace 目录: ${workspace.path}`);
+      }
+
+      // 创建 .memory 目录
+      if (!existsSync(memoryPath)) {
+        mkdirSync(memoryPath, { recursive: true });
+        console.log(`✓ 创建 workspace 记忆目录: ${workspace.path}/.memory/`);
+      }
+    } catch (error) {
+      console.warn(`⚠️ 创建 workspace 目录失败: ${error.message}`);
+    }
+  }
+
+  /**
+   * 获取 workspace 的记忆目录路径
+   * @param {string} workspaceId - workspace ID
+   * @returns {string|null} 记忆目录的绝对路径
+   */
+  getWorkspaceMemoryPath(workspaceId) {
+    const workspace = this.workspaces[workspaceId];
+    if (!workspace?.path) return null;
+    return join(this.projectRoot, workspace.path, '.memory');
+  }
+
+  /**
+   * 获取 workspace 的数据目录路径
+   * @param {string} workspaceId - workspace ID
+   * @returns {string|null} 数据目录的绝对路径
+   */
+  getWorkspaceDataPath(workspaceId) {
+    const workspace = this.workspaces[workspaceId];
+    if (!workspace?.path) return null;
+    return join(this.projectRoot, workspace.path);
   }
 
   /**
