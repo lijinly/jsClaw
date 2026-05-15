@@ -1,50 +1,68 @@
 // ─────────────────────────────────────────────
-//  Goal —— DAG 驱动的目标管理
+//  Goal —— 统一 DAG 目标管理
+//
+//  架构：
+//  - Goal 是唯一的 DAG 节点类型
+//  - Goal 持有 children[] (子 Goal 节点)
+//  - 叶子节点持有 tasks[] (实际执行的任务)
+//  - 支持无限层级嵌套
 // ─────────────────────────────────────────────
 import { randomUUID } from 'crypto';
-import { SubGoal, SubGoalStatus } from './SubGoal.js';
 import { Task, TaskStatus } from './Task.js';
 
 /**
- * Goal 状态
+ * Goal 节点状态
+ * 对应原 SubGoalStatus
  */
 export const GoalStatus = {
-  PENDING: 'pending',       // 待解析
-  IN_PROGRESS: 'in_progress', // 进行中
-  COMPLETED: 'completed',   // 已完成
-  FAILED: 'failed',        // 失败
-  CANCELLED: 'cancelled',  // 已取消
+  PENDING: 'pending',         // 待执行（等待依赖）
+  READY: 'ready',            // 可执行（依赖已满足）
+  IN_PROGRESS: 'in_progress', // 执行中
+  COMPLETED: 'completed',    // 已完成
+  FAILED: 'failed',         // 失败
 };
 
+// 保留别名以保持向后兼容
+export const SubGoalStatus = GoalStatus;
+
 /**
- * Goal 类 —— DAG 驱动的目标管理
+ * Goal 类 —— 统一 DAG 目标管理
  *
- * 核心职责：
- * 1. 将任务解析为 SubGoal + Task 的 DAG 结构
- * 2. 管理 SubGoal 间的依赖关系
- * 3. 提供可执行的 Task 队列
- * 4. 判断 Goal 完成状态
- *
- * DAG 结构：
- * Goal
- * └── SubGoals[] (可嵌套)
- *     ├── dependsOn: [otherSubGoalId, ...]  // DAG 依赖
- *     ├── sequential: [taskId1, taskId2, ...] // 执行顺序
- *     └── Tasks[]
- *         └── tool + args
+ * 特性：
+ * - 唯一的 DAG 节点类型（替代原来的 Goal + SubGoal 双层结构）
+ * - 叶子节点持有 tasks[]（实际执行的任务）
+ * - 内部节点持有 children[]（子 Goal 节点）
+ * - 支持 DAG 依赖关系（dependsOn）
+ * - 支持顺序执行（sequential）
  */
 export class Goal {
   /**
    * @param {object} options
    * @param {string}  options.goalId          - Goal ID
    * @param {string}  options.description      - 目标描述
+   * @param {string}  [options.parentId]      - 父节点 ID
+   * @param {Array<string>} [options.dependsOn] - 依赖的其他 Goal IDs（DAG）
+   * @param {Array<string>} [options.sequential] - 顺序执行列表（Task IDs 或子 Goal IDs）
    * @param {object}  [options.config]        - 配置
    */
   constructor(options) {
     this.id = options.goalId || randomUUID().substring(0, 8);
     this.description = options.description || '';
-    this.createdAt = new Date().toISOString();
-    this.updatedAt = this.createdAt;
+    this.parentId = options.parentId || null;  // 父 Goal 节点
+
+    // DAG 依赖
+    this.dependsOn = options.dependsOn || [];  // 依赖的其他 Goal IDs
+
+    // 执行顺序
+    this.sequential = options.sequential || [];  // Task/子 Goal 的执行顺序
+
+    // ─── 统一节点结构 ───
+    this.children = [];   // 子 Goal 节点（内部节点使用）
+    this.tasks = [];      // 直接子 Tasks（叶子节点使用）
+
+    // 状态
+    this.status = GoalStatus.PENDING;
+    this.completedAt = null;
 
     // 配置
     this.config = {
@@ -53,306 +71,349 @@ export class Goal {
       ...options.config,
     };
 
-    // 根级 SubGoals
-    this.subGoals = [];
-
-    // 所有 SubGoals 的 Map（用于依赖查找）
-    this._subGoalsMap = new Map();
-
-    // 所有 Tasks 的 Map（用于快速查找）
-    this._tasksMap = new Map();
-
-    // 状态
-    this.status = GoalStatus.PENDING;
-
     // 执行信息
+    this.createdAt = new Date().toISOString();
+    this.updatedAt = this.createdAt;
     this.startedAt = null;
-    this.completedAt = null;
     this.duration = null;
+
+    // 统计
+    this.completedChildren = 0;
+    this.failedChildren = 0;
 
     // 事件回调
     this._onTaskAssigned = null;
-    this._onSubGoalCompleted = null;
+    this._onChildGoalCompleted = null;
     this._onGoalCompleted = null;
     this._onGoalFailed = null;
   }
 
   // ═══════════════════════════════════════════
-  //  DAG 构建
+  //  树操作（统一接口）
   // ═══════════════════════════════════════════
 
   /**
-   * 解析任务为 DAG 结构
-   * @param {Array} dagSpec - DAG 规格
-   *
-   * dagSpec 格式：
-   * [
-   *   {
-   *     id: 'sg1',
-   *     description: '数据采集',
-   *     dependsOn: [],  // 可选，依赖的 SubGoal IDs
-   *     sequential: ['task1', 'task2'],  // 可选，执行顺序
-   *     tasks: [
-   *       { id: 'task1', description: '获取数据', tool: 'web_fetch', args: {...} },
-   *       { id: 'task2', description: '处理数据', tool: 'exec', args: {...} }
-   *     ]
-   *   },
-   *   {
-   *     id: 'sg2',
-   *     description: '数据分析',
-   *     dependsOn: ['sg1'],  // 依赖 sg1
-   *     tasks: [...]
-   *   }
-   * ]
+   * 添加子 Goal
+   * @param {Goal} childGoal
    */
-  parse(dagSpec) {
-    if (!Array.isArray(dagSpec)) {
-      throw new Error('dagSpec 必须是数组');
-    }
-
-    // 第一遍：创建所有 SubGoals
-    for (const spec of dagSpec) {
-      const subGoal = new SubGoal({
-        subGoalId: spec.id,
-        description: spec.description,
-        dependsOn: spec.dependsOn || [],
-        sequential: spec.sequential || [],
-      });
-
-      // 添加 Tasks
-      if (spec.tasks && Array.isArray(spec.tasks)) {
-        for (const taskSpec of spec.tasks) {
-          const task = new Task({
-            taskId: taskSpec.id,
-            description: taskSpec.description,
-            tool: taskSpec.tool,
-            args: taskSpec.args || {},
-            maxAttempts: taskSpec.maxAttempts || this.config.maxRetries,
-          });
-          subGoal.addTask(task);
-          this._tasksMap.set(task.id, task);
-        }
-      }
-
-      this.subGoals.push(subGoal);
-      this._subGoalsMap.set(subGoal.id, subGoal);
-    }
-
-    // 第二遍：处理嵌套（如果支持）
-    // 目前仅支持扁平结构
-
-    this.status = GoalStatus.PENDING;
-    return this;
+  addChild(childGoal) {
+    childGoal.parentId = this.id;
+    this.children.push(childGoal);
   }
 
   /**
-   * 手动添加 SubGoal
-   * @param {SubGoal} subGoal
+   * 添加 Task（仅叶子节点使用）
+   * @param {Task} task
    */
-  addSubGoal(subGoal) {
-    this.subGoals.push(subGoal);
-    this._subGoalsMap.set(subGoal.id, subGoal);
-
-    // 递归注册所有 Tasks
-    for (const task of subGoal.getAllTasks()) {
-      this._tasksMap.set(task.id, task);
-    }
+  addTask(task) {
+    task.goalId = this.id;  // 关联到父 Goal
+    this.tasks.push(task);
   }
 
   /**
-   * 获取所有 Tasks
+   * 添加多个 Tasks
+   * @param {Array<Task>} tasks
+   */
+  addTasks(tasks) {
+    tasks.forEach(t => this.addTask(t));
+  }
+
+  /**
+   * 是否为叶子节点（包含 Tasks）
+   */
+  isLeaf() {
+    return this.children.length === 0 && this.tasks.length > 0;
+  }
+
+  /**
+   * 是否为内部节点（包含子 Goals）
+   */
+  isInternal() {
+    return this.children.length > 0;
+  }
+
+  /**
+   * 获取所有叶子 Goals（递归）
+   */
+  getLeafGoals() {
+    if (this.children.length === 0) {
+      return [this];
+    }
+    const leaves = [];
+    for (const child of this.children) {
+      leaves.push(...child.getLeafGoals());
+    }
+    return leaves;
+  }
+
+  /**
+   * 获取所有 Tasks（递归，从叶子节点收集）
    */
   getAllTasks() {
-    const allTasks = [];
-    for (const sg of this.subGoals) {
-      allTasks.push(...sg.getAllTasks());
+    const allTasks = [...this.tasks];
+    for (const child of this.children) {
+      allTasks.push(...child.getAllTasks());
     }
     return allTasks;
   }
 
+  /**
+   * 收集所有 Goals（递归，包含自己）
+   * @private
+   */
+  _collectAllGoals() {
+    const all = [this];
+    for (const child of this.children) {
+      all.push(...child._collectAllGoals());
+    }
+    return all;
+  }
+
+  /**
+   * 获取所有 Goals 的 Map（用于依赖查找）
+   * @public 供外部调用
+   */
+  getGoalsMap() {
+    const map = new Map();
+    for (const goal of this._collectAllGoals()) {
+      map.set(goal.id, goal);
+    }
+    return map;
+  }
+
   // ═══════════════════════════════════════════
-  //  依赖解析
+  //  DAG 依赖管理
   // ═══════════════════════════════════════════
 
   /**
-   * 获取可执行的 Tasks
+   * 设置依赖的 Goals
+   * @param {Array<string>} dependsOn - Goal IDs
+   */
+  setDependencies(dependsOn) {
+    this.dependsOn = dependsOn;
+  }
+
+  /**
+   * 检查依赖是否已满足
+   * @param {Map<string, Goal>} goalsMap - 所有 Goals 的 Map
+   * @returns {boolean}
+   */
+  checkDependencies(goalsMap) {
+    if (this.dependsOn.length === 0) {
+      return true;
+    }
+    return this.dependsOn.every(depId => {
+      const dep = goalsMap.get(depId);
+      return dep && dep.status === GoalStatus.COMPLETED;
+    });
+  }
+
+  /**
+   * 标记为可执行（依赖已满足）
+   */
+  markReady() {
+    if (this.status === GoalStatus.PENDING) {
+      this.status = GoalStatus.READY;
+    }
+  }
+
+  // ═══════════════════════════════════════════
+  //  Task 执行顺序
+  // ═══════════════════════════════════════════
+
+  /**
+   * 获取可执行的 Tasks（按顺序）
    * @returns {Array<Task>}
    */
   getExecutableTasks() {
+    if (this.tasks.length === 0) {
+      return [];
+    }
+
+    // 如果有顺序定义，按顺序返回
+    if (this.sequential.length > 0) {
+      return this.sequential
+        .map(id => this.tasks.find(t => t.id === id))
+        .filter(t => t && t.status === TaskStatus.PENDING);
+    }
+
+    // 否则返回所有待执行的
+    return this.tasks.filter(t => t.status === TaskStatus.PENDING);
+  }
+
+  /**
+   * 获取下一个待执行的 Task
+   */
+  getNextTask() {
+    const executable = this.getExecutableTasks();
+    if (executable.length === 0) {
+      return null;
+    }
+    return executable[0];
+  }
+
+  /**
+   * 获取可执行的 Tasks（从所有就绪的子 Goal 中）
+   * @param {Map<string, Goal>} goalsMap - 所有 Goals 的 Map
+   * @returns {Array<Task>}
+   */
+  getExecutableTasksFromAll(goalsMap) {
     const executable = [];
 
-    for (const sg of this.subGoals) {
-      // 检查依赖是否满足
-      if (!sg.checkDependencies(this._subGoalsMap)) {
+    for (const goal of goalsMap.values()) {
+      // 检查依赖
+      if (!goal.checkDependencies(goalsMap)) {
         continue;
       }
 
-      // 获取可执行的 Task
-      const tasks = sg.getExecutableTasks();
-      executable.push(...tasks);
+      // 获取叶子节点的 Tasks
+      if (goal.isLeaf()) {
+        executable.push(...goal.getExecutableTasks());
+      }
     }
 
     return executable;
   }
 
-  /**
-   * 获取下一个可执行的 Task（按 DAG 顺序）
-   */
-  getNextTask() {
-    // 按 SubGoal 顺序遍历
-    for (const sg of this.subGoals) {
-      if (!sg.checkDependencies(this._subGoalsMap)) {
-        continue;
-      }
-
-      const task = sg.getNextTask();
-      if (task) {
-        return task;
-      }
-    }
-    return null;
-  }
-
-  /**
-   * 获取所有就绪的 SubGoals（无依赖或依赖已满足）
-   */
-  getReadySubGoals() {
-    return this.subGoals.filter(sg =>
-      sg.status === SubGoalStatus.PENDING && sg.checkDependencies(this._subGoalsMap)
-    );
-  }
-
-  /**
-   * 获取可并行的 Tasks
-   * @param {number} maxParallel - 最大并行数
-   */
-  getParallelTasks(maxParallel = null) {
-    maxParallel = maxParallel || this.config.parallelTasks;
-    const executable = this.getExecutableTasks();
-    return executable.slice(0, maxParallel);
-  }
-
   // ═══════════════════════════════════════════
-  //  执行反馈
+  //  状态更新
   // ═══════════════════════════════════════════
 
   /**
-   * Task 执行完成回调
-   * @param {string} taskId - Task ID
-   * @param {boolean} success - 是否成功
-   * @param {object} result - 执行结果
-   * @param {string} [error] - 错误信息
+   * 更新状态（根据子节点状态）
+   * 状态转换规则：
+   * - PENDING → READY/IN_PROGRESS：依赖已满足
+   * - READY/IN_PROGRESS → COMPLETED：所有子节点完成且无失败
+   * - READY/IN_PROGRESS → FAILED：所有子节点完成但有失败
    */
-  onTaskComplete(taskId, success, result, error = null) {
-    const task = this._tasksMap.get(taskId);
-    if (!task) {
-      console.warn(`[Goal] 未找到 Task: ${taskId}`);
-      return;
+  updateStatus() {
+    // 叶子节点：根据 tasks 状态更新
+    if (this.isLeaf()) {
+      return this._updateLeafStatus();
     }
 
-    if (success) {
-      task.succeed(result);
-    } else {
-      task.fail(error || 'Unknown error');
-    }
-
-    // 更新父 SubGoal 状态
-    this._updateParentSubGoal(task.subGoalId);
-
-    // 更新 Goal 状态
-    this._updateGoalStatus();
-
-    this.updatedAt = new Date().toISOString();
+    // 内部节点：根据 children 状态更新
+    return this._updateInternalStatus();
   }
 
   /**
-   * 更新父 SubGoal 状态
+   * 更新叶子节点状态
    * @private
    */
-  _updateParentSubGoal(subGoalId) {
-    const subGoal = this._subGoalsMap.get(subGoalId);
-    if (!subGoal) return;
+  _updateLeafStatus() {
+    let completedTasks = 0;
+    let failedTasks = 0;
+    let pendingTasks = 0;
+    let runningTasks = 0;
 
-    subGoal.updateStatus();
-
-    // 如果 SubGoal 完成，通知
-    if (subGoal.isDone()) {
-      if (this._onSubGoalCompleted) {
-        this._onSubGoalCompleted(subGoal);
-      }
-
-      // 更新依赖此 SubGoal 的其他 SubGoals 的就绪状态
-      this._updateDependentSubGoals(subGoalId);
+    for (const t of this.tasks) {
+      if (t.status === TaskStatus.SUCCESS) completedTasks++;
+      else if (t.status === TaskStatus.FAILED) failedTasks++;
+      else if (t.status === TaskStatus.RUNNING) runningTasks++;
+      else pendingTasks++;
     }
-  }
 
-  /**
-   * 更新依赖某个 SubGoal 的其他 SubGoals
-   * @private
-   */
-  _updateDependentSubGoals(completedId) {
-    for (const sg of this.subGoals) {
-      if (sg.dependsOn.includes(completedId) && sg.status === SubGoalStatus.PENDING) {
-        if (sg.checkDependencies(this._subGoalsMap)) {
-          sg.markReady();
-        }
-      }
-    }
-  }
+    this.completedChildren = completedTasks;
+    this.failedChildren = failedTasks;
 
-  /**
-   * 更新 Goal 状态
-   * @private
-   */
-  _updateGoalStatus() {
-    const allTasks = this.getAllTasks();
-    const allSubGoals = this._collectAllSubGoals();
-
-    // 待处理：非成功、非失败的 tasks
-    const pending = allTasks.filter(t =>
-      t.status !== TaskStatus.SUCCESS && t.status !== TaskStatus.FAILED
-    ).length;
-    const failed = allTasks.filter(t => t.status === TaskStatus.FAILED).length;
-    const completed = allTasks.filter(t => t.status === TaskStatus.SUCCESS).length;
+    const total = this.tasks.length;
 
     // 所有任务都已处理（完成或失败）
-    if (pending === 0) {
-      if (failed > 0) {
+    if (pendingTasks === 0 && total > 0) {
+      if (failedTasks > 0) {
         this.status = GoalStatus.FAILED;
-        this.completedAt = new Date().toISOString();
-        this.duration = new Date(this.completedAt) - new Date(this.startedAt);
-        if (this._onGoalFailed) {
-          this._onGoalFailed(this, { failedTasks: failed, totalTasks: allTasks.length });
-        }
       } else {
         this.status = GoalStatus.COMPLETED;
         this.completedAt = new Date().toISOString();
-        this.duration = new Date(this.completedAt) - new Date(this.startedAt);
-        if (this._onGoalCompleted) {
-          this._onGoalCompleted(this);
-        }
       }
     }
-    // 有任务正在进行或有任务已完成/失败（但还有待处理）
-    else {
+    // 有任务正在进行
+    else if (runningTasks > 0 || completedTasks > 0) {
       this.status = GoalStatus.IN_PROGRESS;
     }
+    // 否则保持 PENDING（等待依赖）
   }
 
   /**
-   * 收集所有 SubGoals（递归）
+   * 更新内部节点状态
    * @private
    */
-  _collectAllSubGoals() {
-    const all = [];
-    const collect = (sgs) => {
-      for (const sg of sgs) {
-        all.push(sg);
-        collect(sg.subGoals);
+  _updateInternalStatus() {
+    let completedChildren = 0;
+    let failedChildren = 0;
+    let pendingChildren = 0;
+    let runningChildren = 0;
+
+    for (const child of this.children) {
+      if (child.status === GoalStatus.COMPLETED) completedChildren++;
+      else if (child.status === GoalStatus.FAILED) failedChildren++;
+      else if (child.status === GoalStatus.IN_PROGRESS) runningChildren++;
+      else pendingChildren++;
+    }
+
+    this.completedChildren = completedChildren;
+    this.failedChildren = failedChildren;
+
+    const total = this.children.length;
+
+    // 所有子节点都已处理（完成或失败）
+    if (pendingChildren === 0 && total > 0) {
+      if (failedChildren > 0) {
+        this.status = GoalStatus.FAILED;
+        this.completedAt = new Date().toISOString();
+      } else {
+        this.status = GoalStatus.COMPLETED;
+        this.completedAt = new Date().toISOString();
       }
-    };
-    collect(this.subGoals);
-    return all;
+    }
+    // 有子节点正在进行
+    else if (runningChildren > 0 || completedChildren > 0) {
+      this.status = GoalStatus.IN_PROGRESS;
+    }
+    // 否则保持 PENDING（等待依赖）
+  }
+
+  /**
+   * 标记为完成
+   */
+  markCompleted() {
+    this.status = GoalStatus.COMPLETED;
+    this.completedAt = new Date().toISOString();
+    this.updateStatus();
+  }
+
+  /**
+   * 标记为失败
+   */
+  markFailed() {
+    this.status = GoalStatus.FAILED;
+    this.completedAt = new Date().toISOString();
+    this.updateStatus();
+  }
+
+  /**
+   * 获取进度
+   * @returns {number} 0-100
+   */
+  getProgress() {
+    if (this.isLeaf()) {
+      if (this.tasks.length === 0) return 0;
+      const completed = this.tasks.filter(t => t.status === TaskStatus.SUCCESS).length;
+      return Math.round((completed / this.tasks.length) * 100);
+    }
+
+    if (this.children.length === 0) return 0;
+    const completed = this.children.filter(c => c.status === GoalStatus.COMPLETED).length;
+    return Math.round((completed / this.children.length) * 100);
+  }
+
+  /**
+   * 是否完成
+   */
+  isDone() {
+    return this.status === GoalStatus.COMPLETED ||
+           this.status === GoalStatus.FAILED ||
+           this.status === GoalStatus.CANCELLED;
   }
 
   // ═══════════════════════════════════════════
@@ -366,11 +427,16 @@ export class Goal {
     this.status = GoalStatus.IN_PROGRESS;
     this.startedAt = new Date().toISOString();
 
-    // 标记无依赖的 SubGoals 为就绪
-    for (const sg of this.subGoals) {
-      if (sg.dependsOn.length === 0) {
-        sg.markReady();
+    // 标记无依赖的子 Goal 为就绪
+    for (const child of this.children) {
+      if (child.dependsOn.length === 0) {
+        child.markReady();
       }
+    }
+
+    // 叶子节点直接标记为就绪
+    if (this.isLeaf() && this.dependsOn.length === 0) {
+      this.markReady();
     }
   }
 
@@ -408,11 +474,11 @@ export class Goal {
   }
 
   /**
-   * 注册 SubGoal 完成回调
-   * @param {function} callback - (subGoal) => void
+   * 注册子 Goal 完成回调
+   * @param {function} callback - (childGoal) => void
    */
-  onSubGoalCompleted(callback) {
-    this._onSubGoalCompleted = callback;
+  onChildGoalCompleted(callback) {
+    this._onChildGoalCompleted = callback;
   }
 
   /**
@@ -432,28 +498,242 @@ export class Goal {
   }
 
   // ═══════════════════════════════════════════
-  //  状态查询
+  //  DAG 解析（兼容旧接口）
   // ═══════════════════════════════════════════
 
   /**
-   * 是否完成
+   * 解析 DAG 规格
+   * @param {Array} dagSpec - DAG 规格
+   *
+   * dagSpec 格式：
+   * [
+   *   {
+   *     id: 'goal1',
+   *     description: '数据采集',
+   *     dependsOn: [],  // 可选，依赖的 Goal IDs
+   *     sequential: ['task1', 'task2'],  // 可选，执行顺序
+   *     tasks: [
+   *       { id: 'task1', description: '获取数据', tool: 'web_fetch', args: {...} },
+   *       { id: 'task2', description: '处理数据', tool: 'exec', args: {...} }
+   *     ]
+   *   },
+   *   {
+   *     id: 'goal2',
+   *     description: '数据分析',
+   *     dependsOn: ['goal1'],  // 依赖 goal1
+   *     tasks: [...]
+   *   }
+   * ]
+   *
+   * 支持嵌套结构：
+   * [
+   *   {
+   *     id: 'parent',
+   *     description: '父目标',
+   *     children: [
+   *       { id: 'child1', description: '子目标1', tasks: [...] },
+   *       { id: 'child2', description: '子目标2', dependsOn: ['child1'], tasks: [...] }
+   *     ]
+   *   }
+   * ]
    */
-  isDone() {
-    return this.status === GoalStatus.COMPLETED ||
-           this.status === GoalStatus.FAILED ||
-           this.status === GoalStatus.CANCELLED;
+  parse(dagSpec) {
+    if (!Array.isArray(dagSpec)) {
+      throw new Error('dagSpec 必须是数组');
+    }
+
+    for (const spec of dagSpec) {
+      const childGoal = new Goal({
+        goalId: spec.id,
+        description: spec.description,
+        dependsOn: spec.dependsOn || [],
+        sequential: spec.sequential || [],
+      });
+
+      // 递归解析子节点
+      if (spec.children && Array.isArray(spec.children)) {
+        for (const childSpec of spec.children) {
+          childGoal._parseChildSpec(childSpec);
+        }
+      }
+
+      // 添加 Tasks（叶子节点）
+      if (spec.tasks && Array.isArray(spec.tasks)) {
+        for (const taskSpec of spec.tasks) {
+          const task = new Task({
+            taskId: taskSpec.id,
+            description: taskSpec.description,
+            tool: taskSpec.tool,
+            args: taskSpec.args || {},
+            maxAttempts: taskSpec.maxAttempts || this.config.maxRetries,
+          });
+          childGoal.addTask(task);
+        }
+      }
+
+      this.addChild(childGoal);
+    }
+
+    this.status = GoalStatus.PENDING;
+    return this;
   }
 
   /**
-   * 获取进度
+   * 递归解析子规格
+   * @private
    */
-  getProgress() {
-    const allTasks = this.getAllTasks();
-    if (allTasks.length === 0) return 0;
+  _parseChildSpec(spec) {
+    const childGoal = new Goal({
+      goalId: spec.id,
+      description: spec.description,
+      dependsOn: spec.dependsOn || [],
+      sequential: spec.sequential || [],
+    });
 
-    const completed = allTasks.filter(t => t.status === TaskStatus.SUCCESS).length;
-    return Math.round((completed / allTasks.length) * 100);
+    // 递归解析嵌套
+    if (spec.children && Array.isArray(spec.children)) {
+      for (const childSpec of spec.children) {
+        childGoal._parseChildSpec(childSpec);
+      }
+    }
+
+    // 添加 Tasks
+    if (spec.tasks && Array.isArray(spec.tasks)) {
+      for (const taskSpec of spec.tasks) {
+        const task = new Task({
+          taskId: taskSpec.id,
+          description: taskSpec.description,
+          tool: taskSpec.tool,
+          args: taskSpec.args || {},
+          maxAttempts: taskSpec.maxAttempts || this.config.maxRetries,
+        });
+        childGoal.addTask(task);
+      }
+    }
+
+    this.addChild(childGoal);
   }
+
+  /**
+   * 手动添加子 Goal（兼容旧接口）
+   * @param {Goal} childGoal
+   */
+  addSubGoal(childGoal) {
+    // 递归注册所有 Tasks
+    for (const task of childGoal.getAllTasks()) {
+      task.goalId = childGoal.id;
+    }
+    this.addChild(childGoal);
+  }
+
+  // ═══════════════════════════════════════════
+  //  执行反馈
+  // ═══════════════════════════════════════════
+
+  /**
+   * Task 执行完成回调
+   * @param {string} taskId - Task ID
+   * @param {boolean} success - 是否成功
+   * @param {object} result - 执行结果
+   * @param {string} [error] - 错误信息
+   */
+  onTaskComplete(taskId, success, result, error = null) {
+    const goalsMap = this.getGoalsMap();
+    let foundGoal = null;
+    let task = null;
+
+    // 查找包含该 Task 的 Goal
+    for (const goal of goalsMap.values()) {
+      const found = goal.tasks.find(t => t.id === taskId);
+      if (found) {
+        task = found;
+        foundGoal = goal;
+        break;
+      }
+    }
+
+    if (!task) {
+      console.warn(`[Goal] 未找到 Task: ${taskId}`);
+      return;
+    }
+
+    if (success) {
+      task.succeed(result);
+    } else {
+      task.fail(error || 'Unknown error');
+    }
+
+    // 更新父 Goal 状态
+    if (foundGoal) {
+      foundGoal.updateStatus();
+
+      // 如果 Goal 完成，通知
+      if (foundGoal.isDone()) {
+        if (this._onChildGoalCompleted) {
+          this._onChildGoalCompleted(foundGoal);
+        }
+
+        // 更新依赖此 Goal 的其他 Goals 的就绪状态
+        this._updateDependentGoals(foundGoal.id, goalsMap);
+      }
+    }
+
+    // 更新根 Goal 状态
+    this._updateRootStatus(goalsMap);
+
+    this.updatedAt = new Date().toISOString();
+  }
+
+  /**
+   * 更新依赖某个 Goal 的其他 Goals
+   * @private
+   */
+  _updateDependentGoals(completedId, goalsMap) {
+    for (const goal of goalsMap.values()) {
+      if (goal.dependsOn.includes(completedId) && goal.status === GoalStatus.PENDING) {
+        if (goal.checkDependencies(goalsMap)) {
+          goal.markReady();
+        }
+      }
+    }
+  }
+
+  /**
+   * 更新根 Goal 状态
+   * @private
+   */
+  _updateRootStatus(goalsMap) {
+    const allTasks = this.getAllTasks();
+
+    // 待处理：非成功、非失败的 tasks
+    const pending = allTasks.filter(t =>
+      t.status !== TaskStatus.SUCCESS && t.status !== TaskStatus.FAILED
+    ).length;
+    const failed = allTasks.filter(t => t.status === TaskStatus.FAILED).length;
+
+    // 所有任务都已处理（完成或失败）
+    if (pending === 0) {
+      if (failed > 0) {
+        this.status = GoalStatus.FAILED;
+        this.completedAt = new Date().toISOString();
+        this.duration = new Date(this.completedAt) - new Date(this.startedAt);
+        if (this._onGoalFailed) {
+          this._onGoalFailed(this, { failedTasks: failed, totalTasks: allTasks.length });
+        }
+      } else {
+        this.status = GoalStatus.COMPLETED;
+        this.completedAt = new Date().toISOString();
+        this.duration = new Date(this.completedAt) - new Date(this.startedAt);
+        if (this._onGoalCompleted) {
+          this._onGoalCompleted(this);
+        }
+      }
+    }
+  }
+
+  // ═══════════════════════════════════════════
+  //  状态查询
+  // ═══════════════════════════════════════════
 
   /**
    * 获取统计信息
@@ -483,6 +763,9 @@ export class Goal {
       startedAt: this.startedAt,
       completedAt: this.completedAt,
       duration: this.duration,
+      isLeaf: this.isLeaf(),
+      childrenCount: this.children.length,
+      tasksCount: this.tasks.length,
     };
   }
 
@@ -491,20 +774,9 @@ export class Goal {
    */
   getTree() {
     return {
-      goal: this.getSummary(),
-      subGoals: this.subGoals.map(sg => this._subGoalToTree(sg)),
-    };
-  }
-
-  /**
-   * SubGoal 转树节点
-   * @private
-   */
-  _subGoalToTree(subGoal) {
-    return {
-      ...subGoal.getSummary(),
-      tasks: subGoal.tasks.map(t => t.getSummary()),
-      children: subGoal.subGoals.map(sg => this._subGoalToTree(sg)),
+      ...this.getSummary(),
+      children: this.children.map(child => child.getTree()),
+      tasks: this.tasks.map(t => t.getSummary()),
     };
   }
 
@@ -519,38 +791,77 @@ export class Goal {
     return {
       id: this.id,
       description: this.description,
+      parentId: this.parentId,
+      dependsOn: this.dependsOn,
+      sequential: this.sequential,
+      status: this.status,
+      completedAt: this.completedAt,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
-      status: this.status,
       startedAt: this.startedAt,
-      completedAt: this.completedAt,
       duration: this.duration,
       config: this.config,
-      subGoals: this.subGoals.map(sg => sg.export()),
+      children: this.children.map(child => child.export()),
+      tasks: this.tasks.map(t => t.export()),
     };
   }
 
   /**
    * 从导出数据恢复
+   * @param {object} data - 导出的数据
+   * @returns {Goal}
    */
   static fromExport(data) {
     const goal = new Goal({
       goalId: data.id,
       description: data.description,
+      parentId: data.parentId,
+      dependsOn: data.dependsOn,
+      sequential: data.sequential,
       config: data.config,
     });
     goal.status = data.status;
+    goal.completedAt = data.completedAt;
     goal.createdAt = data.createdAt;
     goal.updatedAt = data.updatedAt;
     goal.startedAt = data.startedAt;
-    goal.completedAt = data.completedAt;
     goal.duration = data.duration;
 
-    // 重建 SubGoals
-    for (const sgData of (data.subGoals || [])) {
-      goal.addSubGoal(SubGoal.fromExport(sgData));
+    // 重建子节点
+    for (const childData of (data.children || [])) {
+      goal.addChild(Goal.fromExport(childData));
+    }
+
+    // 重建 Tasks
+    for (const taskData of (data.tasks || [])) {
+      goal.addTask(Task.fromExport(taskData));
     }
 
     return goal;
+  }
+
+  // ═══════════════════════════════════════════
+  //  向后兼容别名
+  // ═══════════════════════════════════════════
+
+  /**
+   * @deprecated 请使用 addChild
+   */
+  addSubGoal(childGoal) {
+    return this.addChild(childGoal);
+  }
+
+  /**
+   * @deprecated 请使用 children
+   */
+  get subGoals() {
+    return this.children;
+  }
+
+  /**
+   * @deprecated 请使用 children
+   */
+  set subGoals(val) {
+    this.children = val;
   }
 }

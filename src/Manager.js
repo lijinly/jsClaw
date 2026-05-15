@@ -9,7 +9,7 @@ import { executeToolCalls } from './SkillRegistry.js';
  * Manager 类 —— Goal 执行协调器（管理者）
  *
  * 核心职责：
- * 1. 接受任务 → 解析为 Goal + SubGoals（DAG）
+ * 1. 接受任务 → 解析为 Goal（DAG 树）
  * 2. 分派 Task 给 Member 执行
  * 3. 判断执行是否达标
  * 4. 协调多个 Member 并行/顺序执行
@@ -100,7 +100,7 @@ export class Manager {
       const autoDagSpec = await this._resolveTaskToDag(description, context);
       goal.parse(autoDagSpec);
     } else {
-      // 简化模式：单个 SubGoal，单个 Task
+      // 简化模式：单个 Goal，单个 Task
       goal.parse([{
         id: 'main',
         description,

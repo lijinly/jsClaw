@@ -533,17 +533,22 @@ const prompt = member.buildSystemPrompt(workspaceMemory);
 **组件架构**：
 ```
 Manager（管理者）— 协调 Goal 执行和 Member 分派
-├── Goal — 目标
-│   └── SubGoals[] — 子目标（DAG 节点）
-│       ├── dependsOn — DAG 依赖
-│       ├── sequential — 执行顺序
-│       └── Tasks[] — 叶子节点
+├── Goal — 统一 DAG 节点
+│   ├── children[] — 子 Goal（内部节点）
+│   ├── tasks[] — Task（叶子节点）
+│   ├── dependsOn — DAG 依赖
+│   └── sequential — 执行顺序
 └── Member — 执行者
 ```
 
+**重构 (2026-05-16)**：SubGoal.js 已合并到 Goal.js
+- 统一节点类型：Goal（内部节点/叶子节点）
+- 叶子节点包含 tasks[]
+- 内部节点包含 children[]（子 Goal）
+- Task.goalId 替代 Task.subGoalId
+
 **相关文件**：
-- `src/Goal.js` — Goal 类（DAG 管理、状态机）
-- `src/SubGoal.js` — SubGoal 类（节点管理、依赖检查）
+- `src/Goal.js` — 统一 Goal 类（DAG 管理、状态机）
 - `src/Task.js` — Task 类（最小执行单元）
 - `src/Manager.js` — Manager 类（协调器）
 - `tests/TestGoalDag.js` — 测试用例
@@ -551,8 +556,7 @@ Manager（管理者）— 协调 Goal 执行和 Member 分派
 
 **状态机**：
 - Task: `PENDING → RUNNING → SUCCESS/FAILED/RETRY`
-- SubGoal: `PENDING → READY → IN_PROGRESS → COMPLETED/FAILED`
-- Goal: `PENDING → IN_PROGRESS → COMPLETED/FAILED/CANCELLED`
+- Goal: `PENDING → READY → IN_PROGRESS → COMPLETED/FAILED`
 
 **DAG 规格格式**：
 ```javascript
@@ -575,7 +579,7 @@ Manager（管理者）— 协调 Goal 执行和 Member 分派
 - ✅ 嵌套字段验收
 
 **Task 验收标准**：
-- `subGoalId`：Task 所属的 SubGoal ID
+- `goalId`：Task 所属的 Goal ID（叶子节点）
 - `acceptanceCriteria`：验收标准，支持三种类型：
   1. **函数式**：`{ type: 'function', fn: (result) => boolean }`
   2. **规则式**：`{ type: 'rules', checks: [{ field, operator, value }] }`
@@ -584,8 +588,7 @@ Manager（管理者）— 协调 Goal 执行和 Member 分派
 - 支持 15+ 操作符：equals, greaterThan, contains, isNull, matches 等
 
 **Bug 修复**：
-- SubGoal.updateStatus()：修复状态转换逻辑，支持 IN_PROGRESS 状态
-- Goal._updateGoalStatus()：修复 pending 计算，支持进行中状态
+- Goal.updateStatus()：修复状态转换逻辑，支持 IN_PROGRESS 状态
 
 ## jsClaw 框架文档（2026-05-15/16）
 
@@ -597,7 +600,7 @@ Manager（管理者）— 协调 Goal 执行和 Member 分派
 | `README.md` | 框架概览、架构图、快速开始、文档索引 |
 | `AGENT.md` | Think-Act 模式、核心方法、目标管理、状态机、继承扩展 |
 | `CONTEXT_MANAGER.md` | 上下文自动清理、Token 估算、裁剪策略、配置参数 |
-| `GOAL_DAG_SYSTEM.md` | Goal/SubGoal/Task DAG 系统、验收标准、状态机 |
+| `GOAL_DAG_SYSTEM.md` | Goal/Task 统一 DAG 系统、验收标准、状态机 |
 | `WORKSPACE.md` | WorkSpace、Member、Config、Zone 集成、任务路由 |
 | `SKILL_REGISTRY.md` | Skill 注册、内置 Skill、懒加载机制、扩展开发 |
 | `LLM.md` | LLM 客户端配置、多 Provider 预设、环境变量 |

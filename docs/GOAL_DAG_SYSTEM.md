@@ -1,25 +1,27 @@
-# Goal DAG 系统 —— DAG 驱动的目标管理
+# Goal DAG 系统 —— 统一 DAG 目标管理
 
-> 通过 Goal → SubGoal → Task 三层结构，实现复杂任务的分解、执行和验收
+> 通过统一的 Goal 节点（支持嵌套）和 Task 叶子节点，实现复杂任务的分解、执行和验收
+>
+> **重构说明 (2026-05-16)**：SubGoal.js 已合并到 Goal.js，形成统一的 DAG 节点结构
 
 ## 系统架构
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    Goal DAG 层级结构                             │
+│                    Goal DAG 层级结构                              │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
 │   ┌─────────────────────────────────────────────────────────┐  │
 │   │                       Goal                               │  │
-│   │                     顶层目标                              │  │
+│   │                     根节点                                │  │
 │   │  ┌─────────────────────────────────────────────────┐   │  │
-│   │  │                    SubGoal                      │   │  │
-│   │  │               DAG 节点 (可嵌套)                 │   │  │
+│   │  │                   Goal                           │   │  │
+│   │  │              DAG 节点 (可嵌套)                    │   │  │
 │   │  │  ┌─────────────────────────────────────────┐  │   │  │
 │   │  │  │                 Task                     │  │   │  │
 │   │  │  │              叶子节点                    │  │   │  │
 │   │  │  │  • tool + args                          │  │   │  │
-│   │  │  │  • subGoalId (所属 SubGoal)             │  │   │  │
+│   │  │  │  • goalId (所属 Goal)                   │  │   │  │
 │   │  │  │  • acceptanceCriteria (验收标准)         │  │   │  │
 │   │  │  └─────────────────────────────────────────┘  │   │  │
 │   │  └─────────────────────────────────────────────────┘   │  │
@@ -28,13 +30,20 @@
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+### 核心变化
+
+| 旧架构 | 新架构 |
+|--------|--------|
+| Goal → SubGoal → Task | Goal (嵌套) → Task |
+| 双层节点类型 | 统一节点类型 |
+| SubGoal.js | 已删除，功能合并到 Goal.js |
+
 ## 核心组件
 
 | 组件 | 文件 | 说明 |
 |------|------|------|
-| **Goal** | `src/Goal.js` | 顶层目标，管理多个 SubGoal |
-| **SubGoal** | `src/SubGoal.js` | 子目标，DAG 节点 |
-| **Task** | `src/Task.js` | 最小执行单元 |
+| **Goal** | `src/Goal.js` | 统一 DAG 节点（内部节点/叶子节点） |
+| **Task** | `src/Task.js` | 最小执行单元（叶子节点） |
 | **Manager** | `src/Manager.js` | 协调器，分派任务给执行者 |
 
 ## DAG 示例
@@ -46,13 +55,13 @@
         │                  │                  │
         ▼                  ▼                  ▼
    ┌─────────┐       ┌─────────┐       ┌─────────┐
-   │ SubGoal │       │ SubGoal │       │ SubGoal │
+   │  Goal   │       │  Goal   │       │  Goal   │
    │ 数据采集 │       │ 数据分析 │       │ 报告生成 │
-   │  sg1    │       │  sg2    │       │  sg3    │
+   │  node1  │       │  node2  │       │  node3  │
    └────┬────┘       └────┬────┘       └────┬────┘
         │                 │                 │
         │ dependsOn       │ dependsOn       │ dependsOn
-        │ []              │ [sg1]          │ [sg2]
+        │ []              │ [node1]        │ [node2]
         ▼                 ▼                 ▼
    ┌─────────┐       ┌─────────┐       ┌─────────┐
    │  Task   │       │  Task   │       │  Task   │
@@ -71,6 +80,8 @@ import { Goal } from './Goal.js';
 const goal = new Goal({
   goalId: 'goal-123',           // Goal ID
   description: '完成市场分析',  // 目标描述
+  dependsOn: [],                // DAG 依赖
+  sequential: [],               // 执行顺序
   config: {
     maxRetries: 3,             // 最大重试次数
     parallelTasks: 1,          // 最大并行任务数
@@ -78,16 +89,40 @@ const goal = new Goal({
 });
 ```
 
+### 节点类型
+
+Goal 节点可以是：
+
+1. **内部节点**：有 `children[]`，无 `tasks[]`
+2. **叶子节点**：有 `tasks[]`，无 `children[]`
+
+```javascript
+// 叶子节点（包含 Tasks）
+const leafGoal = new Goal({
+  goalId: 'leaf1',
+  description: '执行具体任务',
+});
+leafGoal.addTask(task);
+
+// 内部节点（包含子 Goals）
+const parentGoal = new Goal({
+  goalId: 'parent',
+  description: '父目标',
+});
+parentGoal.addChild(childGoal1);
+parentGoal.addChild(childGoal2);
+```
+
 ### DAG 解析
 
 ```javascript
-// 定义 DAG 规格
+// 定义 DAG 规格（支持嵌套）
 const dagSpec = [
   {
-    id: 'sg1',                    // SubGoal ID
+    id: 'node1',                    // Goal ID
     description: '数据采集',
-    dependsOn: [],                // 无依赖
-    sequential: ['t1', 't2'],   // Task 执行顺序
+    dependsOn: [],                  // 无依赖
+    sequential: ['t1', 't2'],      // Task 执行顺序
     tasks: [
       {
         id: 't1',
@@ -104,9 +139,9 @@ const dagSpec = [
     ],
   },
   {
-    id: 'sg2',
+    id: 'node2',
     description: '数据分析',
-    dependsOn: ['sg1'],           // 依赖 sg1
+    dependsOn: ['node1'],          // 依赖 node1
     tasks: [
       {
         id: 't3',
@@ -116,14 +151,31 @@ const dagSpec = [
       },
     ],
   },
+  {
+    id: 'parent',                  // 嵌套结构示例
+    description: '父节点',
+    children: [
+      {
+        id: 'child1',
+        description: '子节点1',
+        tasks: [{ id: 't4', tool: 'exec', args: {} }],
+      },
+      {
+        id: 'child2',
+        description: '子节点2',
+        dependsOn: ['child1'],      // 依赖 sibling
+        tasks: [{ id: 't5', tool: 'exec', args: {} }],
+      },
+    ],
+  },
 ];
 
 // 解析为 DAG 结构
 goal.parse(dagSpec);
 
-// 或手动添加 SubGoal
-const subGoal = new SubGoal({ subGoalId: 'sg1', description: '...' });
-goal.addSubGoal(subGoal);
+// 手动添加子 Goal
+const childGoal = new Goal({ goalId: 'child', description: '...' });
+goal.addChild(childGoal);
 ```
 
 ### 执行方法
@@ -138,20 +190,52 @@ const tasks = goal.getExecutableTasks();
 // 获取下一个可执行的 Task（按 DAG 顺序）
 const nextTask = goal.getNextTask();
 
-// 获取可并行的 Tasks
-const parallelTasks = goal.getParallelTasks(3);
-
-// 获取可执行的 SubGoals
-const readySubGoals = goal.getReadySubGoals();
-
 // Task 完成回调
 goal.onTaskComplete(taskId, success, result, error);
 
 // 事件注册
 goal.onTaskAssigned(callback);         // Task 分派
-goal.onSubGoalCompleted(callback);     // SubGoal 完成
-goal.onGoalCompleted(callback);       // Goal 完成
-goal.onGoalFailed(callback);          // Goal 失败
+goal.onChildGoalCompleted(callback);   // 子 Goal 完成
+goal.onGoalCompleted(callback);        // Goal 完成
+goal.onGoalFailed(callback);           // Goal 失败
+```
+
+### 状态
+
+```javascript
+import { GoalStatus } from './Goal.js';
+// 或保持向后兼容
+import { SubGoalStatus } from './Goal.js';
+
+GoalStatus.PENDING;       // 待执行（等待依赖）
+GoalStatus.READY;         // 可执行（依赖已满足）
+GoalStatus.IN_PROGRESS;   // 执行中
+GoalStatus.COMPLETED;     // 已完成
+GoalStatus.FAILED;        // 失败
+```
+
+### 状态转换
+
+```
+                         ┌──────────────┐
+                         │   PENDING    │ ← 初始状态
+                         └──────┬───────┘
+                                │ checkDependencies()
+                                ▼
+                         ┌──────────────┐
+                         │    READY     │
+                         └──────┬───────┘
+                                │ 有 Task 开始执行
+                                ▼
+                         ┌──────────────┐
+                         │ IN_PROGRESS  │
+                         └──────┬───────┘
+                                │ 所有 Task 完成
+                    ┌───────────┴───────────┐
+                    ▼                       ▼
+             ┌──────────────┐         ┌──────────────┐
+             │  COMPLETED   │         │    FAILED    │
+             └──────────────┘         └──────────────┘
 ```
 
 ### 状态查询
@@ -178,6 +262,9 @@ const summary = goal.getSummary();
 //   description: '...',
 //   status: 'in_progress',
 //   progress: 40,
+//   isLeaf: false,
+//   childrenCount: 3,
+//   tasksCount: 0,
 //   stats: {...},
 // }
 
@@ -192,6 +279,15 @@ goal.retryFailedTasks();
 
 // 取消 Goal
 goal.cancel();
+
+// 获取所有 Goals 的 Map
+const goalsMap = goal.getGoalsMap();
+
+// 获取叶子节点
+const leaves = goal.getLeafGoals();
+
+// 获取所有 Tasks
+const allTasks = goal.getAllTasks();
 ```
 
 ### 持久化
@@ -203,58 +299,6 @@ const data = goal.export();
 // 从导出数据恢复
 import { Goal } from './Goal.js';
 const restoredGoal = Goal.fromExport(data);
-```
-
-## SubGoal 类
-
-### 构造函数
-
-```javascript
-import { SubGoal } from './SubGoal.js';
-
-const subGoal = new SubGoal({
-  subGoalId: 'sg1',
-  description: '数据采集',
-  parentId: 'goal-123',          // 父节点 ID
-  dependsOn: [],                 // DAG 依赖
-  sequential: ['t1', 't2'],     // 执行顺序
-});
-```
-
-### 状态
-
-```javascript
-import { SubGoalStatus } from './SubGoal.js';
-
-SubGoalStatus.PENDING;      // 待执行（等待依赖）
-SubGoalStatus.READY;       // 可执行（依赖已满足）
-SubGoalStatus.IN_PROGRESS; // 执行中
-SubGoalStatus.COMPLETED;   // 已完成
-SubGoalStatus.FAILED;      // 失败
-```
-
-### 状态转换
-
-```
-                         ┌──────────────┐
-                         │   PENDING    │ ← 初始状态
-                         └──────┬───────┘
-                                │ markReady()
-                                ▼
-                         ┌──────────────┐
-                         │    READY     │
-                         └──────┬───────┘
-                                │ 有 Task 开始执行
-                                ▼
-                         ┌──────────────┐
-                         │ IN_PROGRESS  │
-                         └──────┬───────┘
-                                │ 所有 Task 完成
-                    ┌───────────┴───────────┐
-                    ▼                       ▼
-             ┌──────────────┐         ┌──────────────┐
-             │  COMPLETED   │         │    FAILED    │
-             └──────────────┘         └──────────────┘
 ```
 
 ## Task 类
@@ -269,9 +313,9 @@ const task = new Task({
   description: '搜索新闻',
   tool: 'web_search',
   args: { query: 'AI 最新动态' },
-  subGoalId: 'sg1',              // 所属 SubGoal
+  goalId: 'node1',              // 所属 Goal（叶子节点）
   maxAttempts: 3,                // 最大尝试次数
-  acceptanceCriteria: {          // 验收标准
+  acceptanceCriteria: {         // 验收标准
     type: 'rules',
     checks: [
       { field: 'success', operator: 'equals', value: true },
@@ -417,8 +461,8 @@ const manager = new Manager({
 // 显式 DAG 模式
 const goal = await manager.submit('分析市场', {
   dagSpec: [
-    { id: 'sg1', tasks: [{ id: 't1', tool: 'web_search', args: {} }] },
-    { id: 'sg2', dependsOn: ['sg1'], tasks: [{ id: 't2', tool: 'exec', args: {} }] },
+    { id: 'node1', tasks: [{ id: 't1', tool: 'web_search', args: {} }] },
+    { id: 'node2', dependsOn: ['node1'], tasks: [{ id: 't2', tool: 'exec', args: {} }] },
   ],
 });
 
@@ -466,9 +510,10 @@ node tests/TestGoalDag.js
 
 | 测试 | 说明 |
 |------|------|
-| 简单 Goal | 无依赖的 SubGoal 和 Task |
+| 简单 Goal | 无依赖的 Goal 和 Task |
 | 顺序执行 | sequential 定义的执行顺序 |
 | DAG 依赖 | dependsOn 定义的依赖关系 |
+| 嵌套结构 | 内部节点包含子 Goals |
 | 失败重试 | Task 失败后的重试机制 |
 | 进度跟踪 | 实时获取执行进度 |
 | 持久化 | 导出/导入 Goal 状态 |

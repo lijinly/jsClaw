@@ -19,7 +19,7 @@ export const TaskStatus = {
  *
  * 包含：
  * - tool + args：调用的工具和参数
- * - subGoalId：所属的 SubGoal
+ * - goalId：所属的 Goal
  * - acceptanceCriteria：验收标准
  */
 export class Task {
@@ -29,7 +29,7 @@ export class Task {
    * @param {string}  options.description         - Task 描述
    * @param {string}  options.tool                - 工具名称
    * @param {object}  options.args                - 工具参数
-   * @param {string}  [options.subGoalId]         - 所属 SubGoal ID
+   * @param {string}  [options.goalId]           - 所属 Goal ID
    * @param {object}  [options.acceptanceCriteria] - 验收标准
    */
   constructor(options) {
@@ -38,8 +38,11 @@ export class Task {
     this.tool = options.tool;
     this.args = options.args || {};
 
-    // 所属 SubGoal
-    this.subGoalId = options.subGoalId || null;
+    // 所属 Goal
+    this.goalId = options.goalId || null;
+
+    // 向后兼容别名
+    this.subGoalId = this.goalId;
 
     // 验收标准
     this.acceptanceCriteria = options.acceptanceCriteria || null;
@@ -391,7 +394,7 @@ export class Task {
       id: this.id,
       description: this.description,
       tool: this.tool,
-      subGoalId: this.subGoalId,
+      goalId: this.goalId,
       status: this.status,
       accepted: this.accepted,
       attempts: this.attempts,
@@ -431,7 +434,7 @@ export class Task {
       description: this.description,
       tool: this.tool,
       args: this.args,
-      subGoalId: this.subGoalId,
+      goalId: this.goalId,
       acceptanceCriteria: this.acceptanceCriteria,
       status: this.status,
       result: this.result,
@@ -456,7 +459,7 @@ export class Task {
       description: data.description,
       tool: data.tool,
       args: data.args,
-      subGoalId: data.subGoalId,
+      goalId: data.goalId || data.subGoalId,  // 兼容旧格式
       acceptanceCriteria: data.acceptanceCriteria,
       maxAttempts: data.maxAttempts,
     });
