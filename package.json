@@ -14,11 +14,11 @@
     "skill:remove": "node src/Marketplace.js remove",
     "skill:installed": "node src/Marketplace.js installed",
     "lint": "echo 'Lint script to be added'",
-    "test": "node src/tests/RunAll.js",
-    "test:ws": "node src/tests/TestWorkspaceMember.js",
-    "test:cm": "node src/tests/TestContextManager.js",
-    "test:cm-large": "node src/tests/TestContextLarge.js",
-    "test:gt": "node src/tests/TestGoalTracker.js",
+    "test": "node tests/RunAll.js",
+    "test:ws": "node tests/TestWorkspaceMember.js",
+    "test:cm": "node tests/TestContextManager.js",
+    "test:cm-large": "node tests/TestContextLarge.js",
+    "test:gt": "node tests/TestGoalTracker.js",
     "format": "echo 'Format script to be added'"
   },
   "dependencies": {

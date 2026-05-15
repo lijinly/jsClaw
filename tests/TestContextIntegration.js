@@ -1,8 +1,8 @@
 // ─────────────────────────────────────────────
 //  ContextManager + Agent 集成测试
 // ─────────────────────────────────────────────
-import { Agent } from '../Agent.js';
-import { ContextManager } from '../ContextManager.js';
+import { Agent } from '../src/Agent.js';
+import { ContextManager } from '../src/ContextManager.js';
 
 // 创建大量模拟消息
 function createLargeHistory(count = 20) {
