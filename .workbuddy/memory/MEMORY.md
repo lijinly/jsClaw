@@ -449,7 +449,7 @@ data/workspaces/<workspaceId>/.memory/
 ```
 
 **相关文件**：
-- `src/WorkspaceMemory.js` — WorkspaceMemory 核心实现
+- `src/Memory.js` — WorkspaceMemory 核心实现
 - `src/WorkSpace.js` — WorkSpace 集成记忆系统
 - `src/Member.js` — Member 使用记忆构建 prompt
 - `src/SystemConfig.js` — 提供 getWorkspaceMemoryPath() 方法
