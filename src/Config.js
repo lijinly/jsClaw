@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────
-//  SystemConfig —— 系统配置加载器
+//  Config —— 系统配置加载器
 // ─────────────────────────────────────────────
 import { readFileSync, existsSync, mkdirSync } from 'fs';
 import { join, dirname, resolve, isAbsolute } from 'path';
@@ -12,14 +12,14 @@ const __dirname = dirname(__filename);
 const DEFAULT_PROJECT_ROOT = resolve(__dirname, '..');
 
 /**
- * SystemConfig 类 —— 统一的系统配置管理
+ * Config 类 —— 统一的系统配置管理
  *
  * 功能：
  * 1. 加载系统配置（config/system.json）
  * 2. 加载 workspace 配置（config/workspaces/*.json）
  * 3. 解析 member 定义（身份、性格、技能）
  */
-export class SystemConfig {
+export class Config {
   /**
    * @param {object} options - 配置选项
    * @param {string} [options.configPath] - 系统配置文件路径
@@ -34,7 +34,7 @@ export class SystemConfig {
       || join(this.projectRoot, 'config', 'system.json');
 
     // 加载配置
-    this.config = this.loadSystemConfig();
+    this.config = this.loadConfig();
 
     // 解析后的 workspaces
     this.workspaces = {};
@@ -47,7 +47,7 @@ export class SystemConfig {
    * 加载系统配置文件
    * @private
    */
-  loadSystemConfig() {
+  loadConfig() {
     try {
       if (existsSync(this.systemConfigPath)) {
         const data = readFileSync(this.systemConfigPath, 'utf-8');
@@ -247,7 +247,7 @@ export class SystemConfig {
    * 获取系统配置
    * @returns {object} 系统配置
    */
-  getSystemConfig() {
+  getConfig() {
     return {
       ...this.config.system,
       paths: this.config.paths,
@@ -265,7 +265,7 @@ export class SystemConfig {
       projectRoot: this.projectRoot,
       systemConfigPath: this.systemConfigPath,
       workspaces: this.listWorkspaces(),
-      system: this.getSystemConfig()
+      system: this.getConfig()
     };
   }
 }
@@ -273,13 +273,13 @@ export class SystemConfig {
 // 导出单例（延迟初始化）
 let _instance = null;
 
-export function getSystemConfig(options = {}) {
+export function getConfig(options = {}) {
   if (!_instance) {
-    _instance = new SystemConfig(options);
+    _instance = new Config(options);
   }
   return _instance;
 }
 
-export function resetSystemConfig() {
+export function resetConfig() {
   _instance = null;
 }

@@ -78,7 +78,7 @@ config/
 ```
 
 **API**：
-- `getSystemConfig()` - 获取配置单例
+- `getConfig()` - 获取配置单例
 - `config.getWorkspace(id)` - 获取 workspace 配置
 - `config.getWorkspaceMembers(id)` - 获取 workspace 的 members
 
@@ -474,7 +474,7 @@ data/workspaces/<workspaceId>/.memory/
 - `src/Memory.js` — WorkspaceMemory 核心实现
 - `src/WorkSpace.js` — WorkSpace 集成记忆系统
 - `src/Member.js` — Member 使用记忆构建 prompt
-- `src/SystemConfig.js` — 提供 getWorkspaceMemoryPath() 方法
+- `src/Config.js` — 提供 getWorkspaceMemoryPath() 方法
 
 **核心 API**：
 ```javascript
@@ -518,7 +518,7 @@ const prompt = member.buildSystemPrompt(workspaceMemory);
 ```
 
 **自动创建目录**：
-- SystemConfig 在初始化时自动创建 `data/workspaces/<id>/` 和 `.memory/` 目录
+- Config 在初始化时自动创建 `data/workspaces/<id>/` 和 `.memory/` 目录
 - 无需手动创建
 
 **Git 提交记录**：
@@ -598,13 +598,13 @@ Manager（管理者）— 协调 Goal 执行和 Member 分派
 | `AGENT.md` | Think-Act 模式、核心方法、目标管理、状态机、继承扩展 |
 | `CONTEXT_MANAGER.md` | 上下文自动清理、Token 估算、裁剪策略、配置参数 |
 | `GOAL_DAG_SYSTEM.md` | Goal/SubGoal/Task DAG 系统、验收标准、状态机 |
-| `WORKSPACE.md` | WorkSpace、Member、SystemConfig、Zone 集成、任务路由 |
+| `WORKSPACE.md` | WorkSpace、Member、Config、Zone 集成、任务路由 |
 | `SKILL_REGISTRY.md` | Skill 注册、内置 Skill、懒加载机制、扩展开发 |
 | `LLM.md` | LLM 客户端配置、多 Provider 预设、环境变量 |
 | `MEMORY.md` | WorkspaceMemory、记忆持久化、文件格式、自动注入 |
 | `ZONE.md` | Zone 生命周期管理、多 Zone 管理、API |
 | `MARKETPLACE.md` | ClaWHub Skill 市场、API、限流说明、安装管理 |
-| `CONFIG.md` | 系统配置、环境变量、Workspace 配置、SystemConfig API |
+| `CONFIG.md` | 系统配置、环境变量、Workspace 配置、Config API |
 | `GOAL_TRACKER.md` | 目标追踪器、检查点、成就/阻碍记录 |
 
 ### CONFIG.md 核心内容
@@ -612,6 +612,6 @@ Manager（管理者）— 协调 Goal 执行和 Member 分派
 - Provider 预设（千问、OpenAI、DeepSeek、Ollama）
 - 系统配置文件（config/system.json）结构
 - Workspace 配置（config/workspaces/*.json）Member 定义
-- SystemConfig API 完整文档（getInfo, listWorkspaces, getWorkspace 等）
+- Config API 完整文档（getInfo, listWorkspaces, getWorkspace 等）
 - 最佳实践（环境隔离、目录结构、敏感信息管理）
 - 配置优先级和验证清单

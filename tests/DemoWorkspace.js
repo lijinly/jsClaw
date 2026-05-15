@@ -2,7 +2,7 @@
 //  WorkSpace + Member 架构演示
 // ─────────────────────────────────────────────
 import { WorkSpace } from '../src/WorkSpace.js';
-import { getSystemConfig } from '../src/SystemConfig.js';
+import { getConfig } from '../src/Config.js';
 
 /**
  * 演示 WorkSpace + Member 新架构
@@ -14,9 +14,9 @@ async function demo() {
   console.log('╚══════════════════════════════════════════════════╝\n');
 
   // 加载系统配置
-  const systemConfig = getSystemConfig();
+  const systemConfig = getConfig();
 
-  // 创建 WorkSpace（使用 SystemConfig）
+  // 创建 WorkSpace（使用 Config）
   const workspace = new WorkSpace({
     id: 'default',  // 使用配置中的 default workspace
     name: '演示工作空间',

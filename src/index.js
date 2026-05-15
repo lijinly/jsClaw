@@ -6,7 +6,7 @@ import readline from 'readline';
 import { initLLM } from './Llm.js';
 import { WorkSpace } from './WorkSpace.js';
 import { Zone } from './Zone.js';
-import { getSystemConfig } from './SystemConfig.js';
+import { getConfig } from './Config.js';
 import './skills/builtins.js';  // 加载内置技能（含 list_skills、read_skill）
 
 // 全局状态
@@ -17,7 +17,7 @@ let _workspace = null;
  * 初始化默认工作区（使用 Zone 管理）
  */
 async function initDefaultWorkspace() {
-  const systemConfig = getSystemConfig();
+  const config = getConfig();
 
   // 使用 Zone 管理 Workspace
   _zone = new Zone({
@@ -32,7 +32,7 @@ async function initDefaultWorkspace() {
 
   if (!ws) {
     // 从配置创建
-    const members = systemConfig.getWorkspaceMembers(workspaceId);
+    const members = config.getWorkspaceMembers(workspaceId);
     if (members.length > 0) {
       await _zone.createWorkspace({
         workspaceId,
@@ -56,7 +56,7 @@ async function initDefaultWorkspace() {
   const workSpace = new WorkSpace({
     id: _workspace.id,
     name: _workspace.name,
-    systemConfig,
+    config,
   });
 
   // 添加 members

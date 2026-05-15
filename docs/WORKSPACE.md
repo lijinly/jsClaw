@@ -53,7 +53,7 @@ const workspace = new WorkSpace({
 ```javascript
 await workspace.initialize();
 // 自动加载：
-// 1. SystemConfig 配置
+// 1. Config 配置
 // 2. Members 成员
 // 3. WorkspaceMemory 记忆
 ```
@@ -281,7 +281,7 @@ const summary = member.getSummary();
 // { id, name, role, skillCount }
 ```
 
-## SystemConfig 系统配置
+## Config 系统配置
 
 ### 配置文件结构
 
@@ -349,13 +349,13 @@ config/
 }
 ```
 
-### SystemConfig API
+### Config API
 
 ```javascript
-import { SystemConfig, getSystemConfig } from './SystemConfig.js';
+import { Config, getConfig } from './Config.js';
 
 // 获取单例
-const config = getSystemConfig();
+const config = getConfig();
 
 // 获取 workspace 配置
 const workspace = config.getWorkspace('default');
@@ -373,7 +373,7 @@ const dataPath = config.getWorkspaceDataPath('default');
 const list = config.listWorkspaces();
 
 // 获取系统配置
-const sysConfig = config.getSystemConfig();
+const sysConfig = config.getConfig();
 ```
 
 ## Zone —— Workspace 生命周期管理

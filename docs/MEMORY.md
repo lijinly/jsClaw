@@ -240,7 +240,7 @@ memory.save(`
 
 ### 目录自动创建
 
-SystemConfig 在初始化时自动创建：
+Config 在初始化时自动创建：
 
 ```javascript
 // 确保目录存在

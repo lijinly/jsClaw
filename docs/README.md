@@ -65,7 +65,7 @@
 | **Llm** | `src/Llm.js` | LLM 客户端封装 |
 | **Marketplace** | `src/Marketplace.js` | ClaWHub Skill 市场 |
 | **Server** | `src/Server.js` | WebUI 服务器 |
-| **SystemConfig** | `src/SystemConfig.js` | 系统配置加载器 |
+| **Config** | `src/Config.js` | 系统配置加载器 |
 
 ## 快速开始
 

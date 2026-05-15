@@ -2,7 +2,7 @@
 //  WorkSpace —— 工作空间
 // ─────────────────────────────────────────────
 import { Member } from './Member.js';
-import { SystemConfig, getSystemConfig } from './SystemConfig.js';
+import { Config, getConfig } from './Config.js';
 import { WorkspaceMemory } from './Memory.js';
 import { readFileSync, existsSync } from 'fs';
 import { join, dirname, resolve } from 'path';
@@ -33,7 +33,7 @@ export class WorkSpace {
    * @param {string} [options.id='default'] - WorkSpace ID
    * @param {string} [options.name='默认工作空间'] - WorkSpace 名称
    * @param {string} [options.configPath] - 配置文件路径（兼容旧配置）
-   * @param {SystemConfig} [options.systemConfig] - 系统配置实例
+   * @param {Config} [options.config] - 系统配置实例
    */
   constructor(options = {}) {
     this.id = options.id || 'default';
@@ -42,7 +42,7 @@ export class WorkSpace {
     this.configPath = options.configPath || null;
 
     // 系统配置
-    this.systemConfig = options.systemConfig || getSystemConfig();
+    this.config = options.config || getConfig();
 
     // Members 集合: id -> Member
     this.members = new Map();
@@ -69,16 +69,16 @@ export class WorkSpace {
     console.log(`\n🚀 WorkSpace 初始化中: ${this.name}`);
     console.log('─'.repeat(50));
 
-    // 使用 SystemConfig 加载配置
-    const workspaceConfig = this.systemConfig.getWorkspace(this.id);
-    const membersFromConfig = this.systemConfig.getWorkspaceMembers(this.id);
+    // 使用 Config 加载配置
+    const workspaceConfig = this.config.getWorkspace(this.id);
+    const membersFromConfig = this.config.getWorkspaceMembers(this.id);
 
     // 加载工作空间记忆
     this._initializeMemory();
 
     // 加载 Members
     if (membersFromConfig.length > 0) {
-      // 使用 SystemConfig 中的成员配置
+      // 使用 Config 中的成员配置
       for (const memberConfig of membersFromConfig) {
         await this.addMember(memberConfig);
       }
@@ -109,8 +109,8 @@ export class WorkSpace {
    * @private
    */
   _initializeMemory() {
-    // 从 SystemConfig 获取记忆目录
-    this.memoryDir = this.systemConfig.getWorkspaceMemoryPath(this.id);
+    // 从 Config 获取记忆目录
+    this.memoryDir = this.config.getWorkspaceMemoryPath(this.id);
     
     if (this.memoryDir) {
       this.memory = new WorkspaceMemory(this.memoryDir);

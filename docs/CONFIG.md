@@ -10,7 +10,7 @@
 2. [环境变量配置](#2-环境变量配置)
 3. [系统配置文件](#3-系统配置文件)
 4. [Workspace 配置](#4-workspace-配置)
-5. [SystemConfig API](#5-systemconfig-api)
+5. [Config API](#5-config-api)
 6. [配置优先级](#6-配置优先级)
 7. [最佳实践](#7-最佳实践)
 
@@ -292,22 +292,22 @@ config/workspaces/<workspace-id>.json
 
 ---
 
-## 5. SystemConfig API
+## 5. Config API
 
 ### 5.1 导入
 
 ```javascript
-import { SystemConfig, getSystemConfig } from '../src/SystemConfig.js';
+import { Config, getConfig } from '../src/Config.js';
 ```
 
 ### 5.2 创建实例
 
 ```javascript
 // 使用默认配置
-const config = new SystemConfig();
+const config = new Config();
 
 // 自定义配置路径
-const config = new SystemConfig({
+const config = new Config({
   configPath: '/path/to/system.json',
   projectRoot: '/path/to/project'
 });
@@ -396,14 +396,14 @@ const dataPath = config.getWorkspaceDataPath('default');
 ### 5.4 单例模式
 
 ```javascript
-import { getSystemConfig } from '../src/SystemConfig.js';
+import { getConfig } from '../src/Config.js';
 
 // 获取单例实例
-const config = getSystemConfig();
+const config = getConfig();
 
 // 重置单例（用于测试）
-import { resetSystemConfig } from '../src/SystemConfig.js';
-resetSystemConfig();
+import { resetConfig } from '../src/Config.js';
+resetConfig();
 ```
 
 ---
@@ -428,7 +428,7 @@ resetSystemConfig();
 
 ```javascript
 // 最高优先级：构造函数选项
-const config = new SystemConfig({
+const config = new Config({
   configPath: '/custom/path/system.json',
   projectRoot: '/custom/project'
 });
@@ -456,7 +456,7 @@ config/
 使用时通过构造函数指定：
 
 ```javascript
-const config = new SystemConfig({
+const config = new Config({
   configPath: `config/system.${process.env.NODE_ENV}.json`
 });
 ```
@@ -537,9 +537,9 @@ if (!apiKey) {
 启动时验证配置完整性：
 
 ```javascript
-import { SystemConfig } from '../src/SystemConfig.js';
+import { Config } from '../src/Config.js';
 
-const config = new SystemConfig();
+const config = new Config();
 const info = config.getInfo();
 
 // 验证必要配置
