@@ -2,6 +2,7 @@
 //  WorkSpace —— 工作空间
 // ─────────────────────────────────────────────
 import { Member } from './Member.js';
+import { Manager } from './Manager.js';
 import { Config, getConfig } from './Config.js';
 import { WorkspaceMemory } from './Memory.js';
 import { readFileSync, existsSync } from 'fs';
@@ -214,6 +215,46 @@ export class WorkSpace {
     console.log(`✓ Member 添加: ${member.name} (${member.id})`);
 
     return member;
+  }
+
+  /**
+   * 添加 Manager 到 WorkSpace
+   * Manager 也是 Member，但具有额外的 Goal 协调能力
+   *
+   * @param {object} managerConfig - Manager 配置
+   * @param {string} managerConfig.id - Manager ID
+   * @param {string} managerConfig.name - Manager 名称
+   * @param {string} [managerConfig.identity] - Manager 身份描述
+   * @param {string} [managerConfig.soul] - Manager 性格描述
+   * @param {Array<string>} [managerConfig.skills] - Manager 技能列表
+   * @param {object} [managerConfig.managerConfig] - Manager 特有配置
+   * @returns {Promise<Manager>} 创建的 Manager 实例
+   */
+  async addManager(managerConfig) {
+    const id = managerConfig.id || `manager_${Date.now()}`;
+
+    if (this.members.has(id)) {
+      console.warn(`⚠️ Manager 已存在: ${id}`);
+      return this.members.get(id);
+    }
+
+    const manager = new Manager({
+      id,
+      config: {
+        name: managerConfig.name || `Manager(${id})`,
+        identity: managerConfig.identity || '任务协调者',
+        soul: managerConfig.soul || '高效严谨，善于规划',
+        skills: managerConfig.skills || [],
+        maxRounds: managerConfig.maxRounds || 10,
+      },
+      workspace: this,  // 传入 workspace 引用
+      managerConfig: managerConfig.managerConfig || {},
+    });
+
+    this.members.set(id, manager);
+    console.log(`✓ Manager 添加: ${manager.name} (${manager.id})`);
+
+    return manager;
   }
 
   /**
@@ -434,6 +475,7 @@ export class WorkSpace {
       id: m.id,
       name: m.name,
       identity: m.identity,
+      type: m instanceof Manager ? 'Manager' : 'Member',
       skills: m.getSkillNames(),
     }));
   }
@@ -449,9 +491,10 @@ export class WorkSpace {
     for (const member of members) {
       const isDefault = member.id === 'default' ? ' [默认]' : '';
       const isActive = member.id === this.activeMemberId ? ' [活跃]' : '';
+      const isManager = member instanceof Manager ? ' [Manager]' : '';
       const skills = member.getSkillNames().join(', ') || '无';
 
-      console.log(`  ${member.name}${isDefault}${isActive}`);
+      console.log(`  ${member.name}${isDefault}${isManager}${isActive}`);
       console.log(`    ID: ${member.id} | 身份: ${member.identity}`);
       console.log(`    技能: ${skills}`);
       console.log('');
@@ -463,12 +506,18 @@ export class WorkSpace {
    * @returns {object} WorkSpace 信息
    */
   getInfo() {
+    const managers = this.getAllMembers().filter(m => m instanceof Manager);
+    const regularMembers = this.getAllMembers().filter(m => !(m instanceof Manager));
+
     return {
       id: this.id,
       name: this.name,
       description: this.description,
       memberCount: this.members.size,
+      managerCount: managers.length,
+      memberCount: regularMembers.length,
       members: this.getMemberSummaries(),
+      managers: managers.map(m => m.getStatus()),
       defaultMember: this.defaultMember ? {
         id: this.defaultMember.id,
         name: this.defaultMember.name,

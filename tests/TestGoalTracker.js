@@ -59,7 +59,9 @@ console.log('切换后活跃目标:', tracker.getGoalSummary());
 // 测试8：完成目标
 console.log('\n========== 测试8：完成目标 ==========');
 tracker.completeGoal(goal2.id, '回测速度提升50%');
-console.log('目标2状态:', tracker.getGoal(goal2.id).status);
+// 完成后目标会从 goals 中移除，所以从历史中获取
+const completedGoal2 = tracker.goalHistory.find(g => g.id === goal2.id);
+console.log('目标2状态:', completedGoal2?.status);
 console.log('历史目标数:', tracker.goalHistory.length);
 
 // 测试9：事件监听

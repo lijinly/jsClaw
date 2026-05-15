@@ -1,55 +1,96 @@
 // ─────────────────────────────────────────────
-//  Manager —— Goal 执行协调器（管理者）
+//  Manager —— Goal 执行协调器（管理者，继承自 Member）
 // ─────────────────────────────────────────────
 import { Goal, GoalStatus } from './Goal.js';
 import { Task, TaskStatus } from './Task.js';
 import { executeToolCalls } from './SkillRegistry.js';
+import { Member } from './Member.js';
 
 /**
  * Manager 类 —— Goal 执行协调器（管理者）
  *
+ * 继承自 Member，因此也是一种执行成员。
+ *
  * 核心职责：
  * 1. 接受任务 → 解析为 Goal（DAG 树）
- * 2. 分派 Task 给 Member 执行
+ * 2. 分派 Task 给 Member 执行（可分派给自己或其他成员）
  * 3. 判断执行是否达标
  * 4. 协调多个 Member 并行/顺序执行
  * 5. 处理 Task 完成通知
  *
- * 执行流程：
- * 用户提交任务 → Manager 解析为 Goal（DAG）
- *   → 获取可执行 Task → 分派给 Member
- *   → Member 执行 → 通知 Manager → 判断达标
- *   → 继续分派其他 Task → Goal 完成
+ * 继承关系：
+ * - 继承自 Member，拥有所有 Member 能力
+ * - Manager 本身也是执行者，可以直接执行任务
+ * - 可以分派任务给其他 Member
  *
  * 使用示例：
  * ```javascript
- * const manager = new Manager({ workspace });
+ * const manager = new Manager({
+ *   id: 'manager1',
+ *   config: { name: '任务管理器', identity: '任务协调者', soul: '高效严谨' },
+ *   workspace,
+ * });
+ *
+ * // 方式 1: 分派给其他 Member 执行
  * await manager.submit('分析市场趋势', {
  *   dagSpec: [
  *     { id: 'gather', tasks: [{ id: 't1', tool: 'web_search', args: {...} }] },
  *     { id: 'analyze', dependsOn: ['gather'], tasks: [{ id: 't2', tool: 'exec', args: {...} }] },
- *   ]
+ *   ],
+ *   memberId: 'researcher',  // 指定执行者
  * });
  *
- * // 或者更简单的形式：让 Manager 自动分解任务
+ * // 方式 2: Manager 自己执行
  * const result = await manager.execute('帮我搜索最新新闻并总结');
+ *
+ * // 方式 3: 混合模式 - 分派部分任务给自己
+ * const goal = await manager.submit('复杂任务', {
+ *   dagSpec: [
+ *     { id: 'step1', tasks: [{ id: 't1', tool: 'agent_chat', args: {...} }] },  // Manager 自己执行
+ *     { id: 'step2', dependsOn: ['step1'], tasks: [{ id: 't2', tool: 'exec', args: {...} }] },  // 分派给其他 Member
+ *   ],
+ *   memberId: 'helper',  // 优先使用 helper 执行
+ * });
  * ```
  */
-export class Manager {
+export class Manager extends Member {
   /**
    * @param {object} options
-   * @param {WorkSpace} options.workspace - 关联的工作空间
-   * @param {object} [options.config] - 配置
+   * @param {string} options.id - Manager ID
+   * @param {object} options.config - Member 配置
+   * @param {string} [options.config.name] - Manager 名称
+   * @param {string} [options.config.identity] - 身份描述
+   * @param {string} [options.config.soul] - 性格描述
+   * @param {Array<string>} [options.config.skills] - 角色技能
+   * @param {number} [options.config.maxRounds] - 最大执行轮次
+   * @param {WorkSpace} options.workspace - 关联的工作空间（必填，用于访问其他 Members）
+   * @param {object} [options.managerConfig] - Manager 特有配置
+   * @param {number} [options.managerConfig.maxParallelTasks] - 最大并行任务数
+   * @param {boolean} [options.managerConfig.autoResolve] - 自动解析任务为 DAG
+   * @param {boolean} [options.managerConfig.enableRetry] - 启用自动重试
    */
   constructor(options) {
-    this.workspace = options.workspace;
+    const { id, config = {}, workspace, managerConfig = {} } = options;
 
-    // 配置
+    // 调用 Member 构造函数
+    super(id, {
+      name: config.name || `Manager(${id})`,
+      identity: config.identity || '任务协调者',
+      soul: config.soul || '高效严谨，善于规划',
+      skills: config.skills || [],
+      maxRounds: config.maxRounds || 10,
+      verbose: config.verbose || false,
+    });
+
+    // Manager 特有属性
+    this.workspace = workspace;  // 访问其他 Members
+
+    // Manager 配置
     this.config = {
-      maxParallelTasks: options.config?.maxParallelTasks || 3,
-      autoResolve: options.config?.autoResolve || false,  // 自动解析任务为 DAG
-      enableRetry: options.config?.enableRetry ?? true,    // 启用自动重试
-      ...options.config,
+      maxParallelTasks: managerConfig.maxParallelTasks || 3,
+      autoResolve: managerConfig.autoResolve || false,  // 自动解析任务为 DAG
+      enableRetry: managerConfig.enableRetry ?? true,   // 启用自动重试
+      ...managerConfig,
     };
 
     // 活跃的 Goals
@@ -61,12 +102,16 @@ export class Manager {
     // 回调函数
     this._onTaskAssigned = null;     // Task 分派回调 (task, memberId)
     this._onTaskComplete = null;     // Task 完成回调 (task, success)
-    this._onGoalComplete = null;    // Goal 完成回调 (goal)
-    this._onGoalFailed = null;      // Goal 失败回调 (goal, reason)
+    this._onGoalComplete = null;     // Goal 完成回调 (goal)
+    this._onGoalFailed = null;       // Goal 失败回调 (goal, reason)
+
+    // Manager 统计
+    this.goalCount = 0;
+    this.totalTasksDispatched = 0;
   }
 
   // ═══════════════════════════════════════════
-  //  核心 API
+  //  核心 API（提交任务）
   // ═══════════════════════════════════════════
 
   /**
@@ -81,7 +126,7 @@ export class Manager {
    * @param {Array} [options.dagSpec] - 显式 DAG 规格
    * @param {string} [options.memberId] - 指定执行者（可选）
    * @param {object} [options.context] - 上下文信息
-   * @returns {Promise<object>} 执行结果
+   * @returns {Promise<Goal>} Goal 实例
    */
   async submit(description, options = {}) {
     const { dagSpec, memberId, context = {} } = options;
@@ -115,6 +160,7 @@ export class Manager {
 
     // 注册活跃 Goal
     this._activeGoals.set(goal.id, goal);
+    this.goalCount++;
 
     // 注册事件回调
     goal.onGoalCompleted((g) => this._handleGoalComplete(g));
@@ -130,7 +176,7 @@ export class Manager {
   }
 
   /**
-   * 同步执行（等待完成）
+   * 同步执行（等待完成）- Manager 自己执行
    * @param {string} description - 任务描述
    * @param {object} options - submit 的选项
    * @returns {Promise<object>} 最终结果
@@ -198,14 +244,18 @@ export class Manager {
       const member = this.workspace.getMember(memberId);
 
       if (!member) {
-        console.warn(`[Manager] Member 不存在: ${memberId}`);
+        console.warn(`[Manager:${this.id}] Member 不存在: ${memberId}`);
         goal.onTaskComplete(task.id, false, null, `Member 不存在: ${memberId}`);
         continue;
       }
 
+      // 检查是否是 Manager 自己
+      const isSelf = memberId === this.id;
+
       // 分配 Task
       this._taskAssignments.set(task.id, memberId);
       task.start(memberId);
+      this.totalTasksDispatched++;
 
       // 通知回调
       if (this._onTaskAssigned) {
@@ -213,7 +263,13 @@ export class Manager {
       }
 
       // 执行 Task
-      this._executeTask(goal, task, member);
+      if (isSelf) {
+        // Manager 自己执行
+        await this._executeTaskAsMember(goal, task);
+      } else {
+        // 分派给其他 Member
+        await this._executeTask(goal, task, member);
+      }
     }
   }
 
@@ -230,14 +286,14 @@ export class Manager {
   }
 
   /**
-   * 执行单个 Task
+   * 执行单个 Task（分派给其他 Member）
    * @param {Goal} goal - Goal 实例
    * @param {Task} task - Task 实例
    * @param {Member} member - Member 实例
    * @private
    */
   async _executeTask(goal, task, member) {
-    console.log(`[Manager] 执行 Task: ${task.id} (${task.tool}) by ${member.name}`);
+    console.log(`[Manager:${this.id}] 分派 Task: ${task.id} (${task.tool}) → ${member.name}`);
 
     try {
       let result;
@@ -246,25 +302,13 @@ export class Manager {
         case 'agent_chat':
           // 通用聊天任务
           result = await member.execute(task.args.message || task.description, {
-            verbose: true,
+            verbose: this.verbose,
           });
           break;
 
         case 'web_search':
-          // 搜索任务（使用 SkillRegistry）
-          result = await this._executeTool(task.tool, task.args);
-          break;
-
         case 'web_fetch':
-          // 抓取任务
-          result = await this._executeTool(task.tool, task.args);
-          break;
-
         case 'exec':
-          // 执行命令
-          result = await this._executeTool(task.tool, task.args);
-          break;
-
         default:
           // 其他工具
           result = await this._executeTool(task.tool, task.args);
@@ -281,7 +325,7 @@ export class Manager {
       await this._dispatchTasks(goal);
 
     } catch (error) {
-      console.error(`[Manager] Task 执行失败: ${task.id} - ${error.message}`);
+      console.error(`[Manager:${this.id}] Task 执行失败: ${task.id} - ${error.message}`);
 
       // 标记失败
       goal.onTaskComplete(task.id, false, null, error.message);
@@ -292,13 +336,63 @@ export class Manager {
 
       // 自动重试
       if (this.config.enableRetry && task.canRetry()) {
-        console.log(`[Manager] 重试 Task: ${task.id} (${task.attempts}/${task.maxAttempts})`);
+        console.log(`[Manager:${this.id}] 重试 Task: ${task.id} (${task.attempts}/${task.maxAttempts})`);
         setTimeout(() => {
           const retryTask = goal._tasksMap.get(task.id);
           if (retryTask) {
             this._executeTask(goal, retryTask, member);
           }
         }, 1000);
+      }
+    }
+  }
+
+  /**
+   * Manager 自己执行 Task（作为 Member）
+   * @param {Goal} goal - Goal 实例
+   * @param {Task} task - Task 实例
+   * @private
+   */
+  async _executeTaskAsMember(goal, task) {
+    console.log(`[Manager:${this.id}] 自执行 Task: ${task.id} (${task.tool})`);
+
+    try {
+      let result;
+
+      switch (task.tool) {
+        case 'agent_chat':
+          // 通用聊天任务 - 使用继承自 Member 的 execute 方法
+          result = await this.execute(task.args.message || task.description, {
+            verbose: this.verbose,
+          });
+          break;
+
+        case 'web_search':
+        case 'web_fetch':
+        case 'exec':
+        default:
+          // 其他工具
+          result = await this._executeTool(task.tool, task.args);
+      }
+
+      // 标记成功
+      goal.onTaskComplete(task.id, true, result);
+
+      if (this._onTaskComplete) {
+        this._onTaskComplete(task, true, result);
+      }
+
+      // 检查是否有新的可执行 Task
+      await this._dispatchTasks(goal);
+
+    } catch (error) {
+      console.error(`[Manager:${this.id}] Task 自执行失败: ${task.id} - ${error.message}`);
+
+      // 标记失败
+      goal.onTaskComplete(task.id, false, null, error.message);
+
+      if (this._onTaskComplete) {
+        this._onTaskComplete(task, false, null, error);
       }
     }
   }
@@ -352,7 +446,7 @@ export class Manager {
       // 超时保护（5 分钟）
       setTimeout(() => {
         clearInterval(interval);
-        console.warn(`[Manager] Goal 超时: ${goal.id}`);
+        console.warn(`[Manager:${this.id}] Goal 超时: ${goal.id}`);
         resolve(goal);
       }, 5 * 60 * 1000);
     });
@@ -390,7 +484,7 @@ export class Manager {
    * @private
    */
   _handleGoalComplete(goal) {
-    console.log(`[Manager] Goal 完成: ${goal.id} - ${goal.description}`);
+    console.log(`[Manager:${this.id}] Goal 完成: ${goal.id} - ${goal.description}`);
 
     // 清理活跃 Goal
     setTimeout(() => {
@@ -409,7 +503,7 @@ export class Manager {
    * @private
    */
   _handleGoalFailed(goal, stats) {
-    console.error(`[Manager] Goal 失败: ${goal.id} - ${goal.description}`);
+    console.error(`[Manager:${this.id}] Goal 失败: ${goal.id} - ${goal.description}`);
     console.error(`   失败 Tasks: ${stats.failedTasks}/${stats.totalTasks}`);
 
     if (this._onGoalFailed) {
@@ -467,20 +561,6 @@ export class Manager {
    */
   async _resolveTaskToDag(description, context) {
     // TODO: 使用 LLM 自动分解
-    // 提示词模板：
-    // "将以下任务分解为可执行的步骤 DAG：
-    //  {description}
-    //
-    //  每个步骤包含：
-    //  - id: 唯一标识
-    //  - description: 步骤描述
-    //  - dependsOn: 依赖的其他步骤（可选）
-    //  - tasks: 该步骤包含的具体任务
-    //    - tool: 使用的工具
-    //    - args: 工具参数
-    //
-    //  请以 JSON 数组格式返回。"
-
     console.warn('[Manager] 自动分解未实现，使用简化模式');
     return [{
       id: 'main',
@@ -500,25 +580,40 @@ export class Manager {
 
   /**
    * 获取 Manager 状态
+   * @returns {object}
    */
   getStatus() {
     return {
+      id: this.id,
+      name: this.name,
+      type: 'Manager',
       activeGoals: this._activeGoals.size,
       taskAssignments: this._taskAssignments.size,
+      goalCount: this.goalCount,
+      totalTasksDispatched: this.totalTasksDispatched,
       config: this.config,
     };
   }
 
   /**
    * 获取执行统计
+   * @returns {object}
    */
   getStats() {
     const goals = this.getActiveGoals();
     const totalTasks = goals.reduce((sum, g) => sum + g.getAllTasks().length, 0);
 
     return {
+      // 继承自 Member
+      id: this.id,
+      name: this.name,
+      type: 'Manager',
+      taskCount: this.taskCount,
+      isActive: this.isActive,
+      // Manager 特有
       activeGoals: goals.length,
-      totalTasks,
+      goalCount: this.goalCount,
+      totalTasksDispatched: this.totalTasksDispatched,
       pendingTasks: goals.reduce((sum, g) => {
         return sum + g.getAllTasks().filter(t => t.status === TaskStatus.PENDING).length;
       }, 0),
@@ -533,4 +628,38 @@ export class Manager {
       }, 0),
     };
   }
+
+  /**
+   * 获取 Manager 详细信息
+   * 包含继承自 Member 的信息和 Manager 特有的信息
+   * @returns {object}
+   */
+  getInfo() {
+    return {
+      // 继承自 Member
+      ...super.getInfo(),
+      // Manager 特有
+      type: 'Manager',
+      workspace: this.workspace ? this.workspace.id : null,
+      activeGoals: this._activeGoals.size,
+      goalCount: this.goalCount,
+      totalTasksDispatched: this.totalTasksDispatched,
+    };
+  }
+}
+
+// ─────────────────────────────────────────────
+//  向后兼容：工厂函数（可选）
+// ─────────────────────────────────────────────
+
+/**
+ * 创建 Manager 实例（向后兼容的工厂函数）
+ *
+ * @deprecated 使用 new Manager({ id, config, workspace }) 方式
+ * @param {object} options - 构造函数选项
+ * @returns {Manager}
+ */
+export function createManager(options) {
+  console.warn('[Manager] createManager() 已弃用，请使用 new Manager({ id, config, workspace })');
+  return new Manager(options);
 }

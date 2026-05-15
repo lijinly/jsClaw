@@ -11,6 +11,16 @@ import { randomUUID } from 'crypto';
 import { Task, TaskStatus } from './Task.js';
 
 /**
+ * GoalTracker 优先级
+ */
+export const GoalPriority = {
+  LOW: 1,
+  NORMAL: 2,
+  HIGH: 3,
+  CRITICAL: 4,
+};
+
+/**
  * Goal 节点状态
  * 对应原 SubGoalStatus
  */
@@ -24,6 +34,512 @@ export const GoalStatus = {
 
 // 保留别名以保持向后兼容
 export const SubGoalStatus = GoalStatus;
+
+// ─────────────────────────────────────────────
+//  GoalTracker —— 目标追踪器
+// ─────────────────────────────────────────────
+
+/**
+ * 追踪目标的数据结构
+ * @typedef {Object} TrackedGoal
+ * @property {string} id - 目标ID
+ * @property {string} description - 目标描述
+ * @property {number} priority - 优先级
+ * @property {string} status - 状态
+ * @property {number} progress - 进度 (0-100)
+ * @property {Array} checkpoints - 检查点列表
+ * @property {object} context - 上下文信息
+ * @property {Array} context.achievements - 成就列表
+ * @property {Array} context.blockers - 阻碍列表
+ * @property {Array} tags - 标签
+ * @property {string} createdAt - 创建时间
+ * @property {string} completedAt - 完成时间
+ */
+
+/**
+ * GoalTracker 类 —— 目标追踪器
+ *
+ * 用于在 Agent 运行时追踪和管理目标
+ *
+ * @example
+ * const tracker = new GoalTracker();
+ * const goal = tracker.createGoal('完成量化策略开发', { priority: GoalPriority.HIGH });
+ * tracker.addCheckpoint(goal.id, '完成数据采集');
+ * tracker.completeCheckpoint(goal.id, checkpointId);
+ * const context = tracker.getGoalContext();
+ */
+export class GoalTracker {
+  /**
+   * @param {object} options
+   * @param {string} [options.persistPath] - 持久化路径
+   * @param {boolean} [options.autoSave=true] - 自动保存
+   */
+  constructor(options = {}) {
+    this.persistPath = options.persistPath || null;
+    this.autoSave = options.autoSave ?? true;
+
+    /** @type {Map<string, TrackedGoal>} */
+    this.goals = new Map();
+
+    /** @type {Array<TrackedGoal>} */
+    this.goalHistory = [];
+
+    /** @type {string|null} */
+    this.activeGoalId = null;
+
+    /** @type {Map<string, Function>} */
+    this._eventListeners = new Map();
+  }
+
+  // ═══════════════════════════════════════════
+  //  基础 CRUD
+  // ═══════════════════════════════════════════
+
+  /**
+   * 创建新目标
+   * @param {string} description - 目标描述
+   * @param {object} options - 配置选项
+   * @param {number} [options.priority=GoalPriority.NORMAL] - 优先级
+   * @param {Array<string>} [options.tags=[]] - 标签
+   * @returns {TrackedGoal}
+   */
+  createGoal(description, options = {}) {
+    const goal = {
+      id: randomUUID().substring(0, 8),
+      description,
+      priority: options.priority || GoalPriority.NORMAL,
+      status: 'active',
+      progress: 0,
+      checkpoints: [],
+      context: {
+        achievements: [],
+        blockers: [],
+      },
+      tags: options.tags || [],
+      createdAt: new Date().toISOString(),
+      completedAt: null,
+    };
+
+    this.goals.set(goal.id, goal);
+    this.activeGoalId = goal.id;
+
+    this._emit('onGoalCreated', goal);
+    return goal;
+  }
+
+  /**
+   * 获取目标
+   * @param {string} goalId - 目标ID
+   * @returns {TrackedGoal|null}
+   */
+  getGoal(goalId) {
+    return this.goals.get(goalId) || null;
+  }
+
+  /**
+   * 获取所有目标
+   * @returns {Array<TrackedGoal>}
+   */
+  getAllGoals() {
+    return Array.from(this.goals.values());
+  }
+
+  /**
+   * 获取活跃目标
+   * @returns {TrackedGoal|null}
+   */
+  getActiveGoal() {
+    if (!this.activeGoalId) return null;
+    return this.goals.get(this.activeGoalId) || null;
+  }
+
+  /**
+   * 设置活跃目标
+   * @param {string} goalId - 目标ID
+   */
+  setActiveGoal(goalId) {
+    if (this.goals.has(goalId)) {
+      this.activeGoalId = goalId;
+      this._emit('onGoalUpdated', this.getGoal(goalId));
+    }
+  }
+
+  /**
+   * 删除目标
+   * @param {string} goalId - 目标ID
+   */
+  deleteGoal(goalId) {
+    this.goals.delete(goalId);
+    if (this.activeGoalId === goalId) {
+      this.activeGoalId = this.goals.keys().next().value || null;
+    }
+  }
+
+  /**
+   * 完成目标
+   * @param {string} goalId - 目标ID
+   * @param {string} [note] - 完成备注
+   */
+  completeGoal(goalId, note = '') {
+    const goal = this.goals.get(goalId);
+    if (!goal) return;
+
+    goal.status = 'completed';
+    goal.progress = 100;
+    goal.completedAt = new Date().toISOString();
+
+    if (note) {
+      goal.context.achievements.push({
+        description: note,
+        timestamp: goal.completedAt,
+      });
+    }
+
+    // 移到历史
+    this.goals.delete(goalId);
+    this.goalHistory.push(goal);
+
+    // 更新活跃目标
+    if (this.activeGoalId === goalId) {
+      this.activeGoalId = this.goals.keys().next().value || null;
+    }
+
+    this._emit('onGoalCompleted', goal);
+    this._autoSave();
+  }
+
+  // ═══════════════════════════════════════════
+  //  检查点管理
+  // ═══════════════════════════════════════════
+
+  /**
+   * 添加检查点
+   * @param {string} goalId - 目标ID
+   * @param {string} description - 检查点描述
+   * @returns {object}
+   */
+  addCheckpoint(goalId, description) {
+    const goal = this.goals.get(goalId);
+    if (!goal) return null;
+
+    const checkpoint = {
+      id: randomUUID().substring(0, 8),
+      description,
+      status: 'pending',
+      completedAt: null,
+      note: '',
+    };
+
+    goal.checkpoints.push(checkpoint);
+    this._emit('onGoalUpdated', goal);
+    this._autoSave();
+
+    return checkpoint;
+  }
+
+  /**
+   * 完成检查点
+   * @param {string} goalId - 目标ID
+   * @param {string} checkpointId - 检查点ID
+   * @param {string} [note] - 完成备注
+   */
+  completeCheckpoint(goalId, checkpointId, note = '') {
+    const goal = this.goals.get(goalId);
+    if (!goal) return;
+
+    const checkpoint = goal.checkpoints.find(cp => cp.id === checkpointId);
+    if (!checkpoint) return;
+
+    checkpoint.status = 'completed';
+    checkpoint.completedAt = new Date().toISOString();
+    checkpoint.note = note;
+
+    if (note) {
+      goal.context.achievements.push({
+        description: note,
+        timestamp: checkpoint.completedAt,
+      });
+    }
+
+    // 更新进度
+    const completed = goal.checkpoints.filter(cp => cp.status === 'completed').length;
+    goal.progress = Math.round((completed / goal.checkpoints.length) * 100);
+
+    this._emit('onGoalUpdated', goal);
+    this._autoSave();
+  }
+
+  /**
+   * 获取检查点
+   * @param {string} goalId - 目标ID
+   * @returns {Array}
+   */
+  getCheckpoints(goalId) {
+    const goal = this.goals.get(goalId);
+    return goal ? goal.checkpoints : [];
+  }
+
+  // ═══════════════════════════════════════════
+  //  上下文管理
+  // ═══════════════════════════════════════════
+
+  /**
+   * 添加成就
+   * @param {string} goalId - 目标ID
+   * @param {string} achievement - 成就描述
+   */
+  addAchievement(goalId, achievement) {
+    const goal = this.goals.get(goalId);
+    if (!goal) return;
+
+    goal.context.achievements.push({
+      description: achievement,
+      timestamp: new Date().toISOString(),
+    });
+
+    this._emit('onGoalUpdated', goal);
+    this._autoSave();
+  }
+
+  /**
+   * 添加阻碍
+   * @param {string} goalId - 目标ID
+   * @param {string} blocker - 阻碍描述
+   */
+  addBlocker(goalId, blocker) {
+    const goal = this.goals.get(goalId);
+    if (!goal) return;
+
+    goal.context.blockers.push({
+      description: blocker,
+      timestamp: new Date().toISOString(),
+    });
+
+    this._emit('onGoalUpdated', goal);
+    this._autoSave();
+  }
+
+  /**
+   * 清除阻碍
+   * @param {string} goalId - 目标ID
+   * @param {number} index - 阻碍索引
+   */
+  clearBlocker(goalId, index) {
+    const goal = this.goals.get(goalId);
+    if (!goal) return;
+
+    goal.context.blockers.splice(index, 1);
+    this._emit('onGoalUpdated', goal);
+    this._autoSave();
+  }
+
+  /**
+   * 更新目标进度
+   * @param {string} goalId - 目标ID
+   * @param {number} progress - 进度 (0-100)
+   */
+  updateProgress(goalId, progress) {
+    const goal = this.goals.get(goalId);
+    if (!goal) return;
+
+    goal.progress = Math.max(0, Math.min(100, progress));
+    this._emit('onGoalUpdated', goal);
+    this._autoSave();
+  }
+
+  // ═══════════════════════════════════════════
+  //  上下文生成
+  // ═══════════════════════════════════════════
+
+  /**
+   * 获取目标上下文（用于注入到 system prompt）
+   * @param {string} [goalId] - 指定目标ID（默认使用活跃目标）
+   * @returns {string}
+   */
+  getGoalContext(goalId = null) {
+    const goal = goalId ? this.goals.get(goalId) : this.getActiveGoal();
+    if (!goal) return '';
+
+    const lines = [];
+
+    lines.push('## 当前目标');
+    lines.push(`- ${goal.description}`);
+    lines.push(`- 进度: ${goal.progress}%`);
+
+    // 检查点
+    if (goal.checkpoints.length > 0) {
+      lines.push('- 检查点:');
+      for (const cp of goal.checkpoints) {
+        const status = cp.status === 'completed' ? '✓' : '○';
+        lines.push(`  ${status} ${cp.description}`);
+      }
+    }
+
+    // 阻碍
+    if (goal.context.blockers.length > 0) {
+      lines.push('- 阻碍:');
+      for (const blocker of goal.context.blockers) {
+        lines.push(`  ⚠ ${blocker.description}`);
+      }
+    }
+
+    // 成就
+    if (goal.context.achievements.length > 0) {
+      lines.push('- 成就:');
+      for (const ach of goal.context.achievements.slice(-3)) {
+        lines.push(`  🎉 ${ach.description}`);
+      }
+    }
+
+    return lines.join('\n');
+  }
+
+  /**
+   * 获取目标概要
+   * @param {string} [goalId] - 指定目标ID（默认使用活跃目标）
+   * @returns {object|null}
+   */
+  getGoalSummary(goalId = null) {
+    const goal = goalId ? this.goals.get(goalId) : this.getActiveGoal();
+    if (!goal) return null;
+
+    return {
+      id: goal.id,
+      description: goal.description,
+      priority: goal.priority,
+      status: goal.status,
+      progress: goal.progress,
+      checkpoints: goal.checkpoints.length,
+      completedCheckpoints: goal.checkpoints.filter(cp => cp.status === 'completed').length,
+      blockers: goal.context.blockers.length,
+      achievements: goal.context.achievements.length,
+    };
+  }
+
+  // ═══════════════════════════════════════════
+  //  事件系统
+  // ═══════════════════════════════════════════
+
+  /**
+   * 注册事件监听器
+   * @param {string} event - 事件名称
+   * @param {Function} callback - 回调函数
+   */
+  on(event, callback) {
+    if (!this._eventListeners.has(event)) {
+      this._eventListeners.set(event, []);
+    }
+    this._eventListeners.get(event).push(callback);
+  }
+
+  /**
+   * 移除事件监听器
+   * @param {string} event - 事件名称
+   * @param {Function} [callback] - 回调函数（不传则移除所有）
+   */
+  off(event, callback = null) {
+    if (!callback) {
+      this._eventListeners.delete(event);
+    } else {
+      const listeners = this._eventListeners.get(event) || [];
+      const index = listeners.indexOf(callback);
+      if (index > -1) listeners.splice(index, 1);
+    }
+  }
+
+  /**
+   * 触发事件
+   * @private
+   */
+  _emit(event, ...args) {
+    const listeners = this._eventListeners.get(event) || [];
+    for (const callback of listeners) {
+      try {
+        callback(...args);
+      } catch (error) {
+        console.error(`[GoalTracker] 事件处理错误: ${error.message}`);
+      }
+    }
+  }
+
+  // ═══════════════════════════════════════════
+  //  持久化
+  // ═══════════════════════════════════════════
+
+  /**
+   * 自动保存（如果有配置路径）
+   * @private
+   */
+  _autoSave() {
+    if (this.autoSave && this.persistPath) {
+      this.save();
+    }
+  }
+
+  /**
+   * 保存到文件
+   */
+  save() {
+    if (!this.persistPath) return;
+
+    const data = {
+      goals: Array.from(this.goals.values()),
+      goalHistory: this.goalHistory,
+      activeGoalId: this.activeGoalId,
+    };
+
+    try {
+      const { writeFileSync } = require('fs');
+      writeFileSync(this.persistPath, JSON.stringify(data, null, 2));
+    } catch (error) {
+      console.error(`[GoalTracker] 保存失败: ${error.message}`);
+    }
+  }
+
+  /**
+   * 从文件加载
+   */
+  load() {
+    if (!this.persistPath) return;
+
+    try {
+      const { readFileSync, existsSync } = require('fs');
+      if (existsSync(this.persistPath)) {
+        const data = JSON.parse(readFileSync(this.persistPath, 'utf-8'));
+        this.goals = new Map(data.goals.map(g => [g.id, g]));
+        this.goalHistory = data.goalHistory || [];
+        this.activeGoalId = data.activeGoalId;
+      }
+    } catch (error) {
+      console.error(`[GoalTracker] 加载失败: ${error.message}`);
+    }
+  }
+
+  /**
+   * 导出所有数据
+   * @returns {object}
+   */
+  export() {
+    return {
+      goals: Array.from(this.goals.values()),
+      goalHistory: this.goalHistory,
+      activeGoalId: this.activeGoalId,
+    };
+  }
+
+  /**
+   * 清除所有数据
+   */
+  clear() {
+    this.goals.clear();
+    this.goalHistory = [];
+    this.activeGoalId = null;
+  }
+}
+
+// ─────────────────────────────────────────────
+//  Goal —— 统一 DAG 目标管理
+// ─────────────────────────────────────────────
 
 /**
  * Goal 类 —— 统一 DAG 目标管理
