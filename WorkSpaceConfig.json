@@ -1,0 +1,34 @@
+{
+  "defaultMember": {
+    "id": "default",
+    "name": "管理者",
+    "role": "工作空间管理者和执行者，负责协调任务和日常事务处理",
+    "skills": [],
+    "identityPath": "members/default/identity.md",
+    "soulPath": "members/default/soul.md"
+  },
+  "members": {
+    "researcher": {
+      "id": "researcher",
+      "name": "研究员",
+      "role": "专业研究员，擅长信息收集、数据分析和深度调研",
+      "skills": ["web_search", "web_fetch", "read", "list"],
+      "identityPath": "members/researcher/identity.md",
+      "soulPath": "members/researcher/soul.md"
+    },
+    "coder": {
+      "id": "coder",
+      "name": "开发者",
+      "role": "专业开发者，擅长代码编写、调试和系统开发",
+      "skills": ["read", "write", "edit", "exec", "apply_patch"],
+      "identityPath": "members/coder/identity.md",
+      "soulPath": "members/coder/soul.md"
+    },
+    "writer": {
+      "id": "writer",
+      "name": "作者",
+      "role": "专业内容创作者，擅长文档撰写、报告生成和内容编辑",
+      "skills": ["read", "write", "edit"]
+    }
+  }
+}

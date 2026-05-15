@@ -1,278 +1,414 @@
 // ─────────────────────────────────────────────
-//  WorkSpace —— 工作空间
+//  WorkSpace —— 工作空间（无 Team 概念）
 // ─────────────────────────────────────────────
-import { Team } from './Team.js';
+import { Member } from './Member.js';
 import { Agent } from './agent.js';
-import { readFileSync } from 'fs';
-import { join } from 'path';
+import { SystemConfig, getSystemConfig } from './SystemConfig.js';
+import { readFileSync, existsSync } from 'fs';
+import { join, dirname, resolve } from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 /**
  * WorkSpace 类 - 工作空间
  *
+ * 架构设计：
+ * - 用 WorkSpace 代替 Team 概念
+ * - WorkSpace 直接管理多个 Member
+ * - 默认有一个 defaultMember 作为管理者和执行者
+ * - 多个 Member 可在管理者协调下并行/协作工作
+ *
  * 职责：
- * 1. 创建 Team 及管理 Team 的生命周期
- * 2. 管理 Teams 的集合和当前 Team 状态
- * 3. 根据任务是否带有 teamId，决定交给指定 Team 或 Agent
- * 4. 返回 Team 或 Agent 完成的结果给用户
+ * 1. 管理 Members 的生命周期
+ * 2. 协调多个 Member 执行任务
+ * 3. 默认使用 defaultMember 执行简单任务
+ * 4. 复杂任务可分发给多个 Member 协作
  */
 export class WorkSpace {
-  constructor(configPath = './src/Config.json') {
-    this.teams = new Map();  // id -> Team
-    this.currentTeamId = null;  // 用户当前所在的 Team（null = Team 外）
-    this.configPath = configPath;
-    this.defaultAgent = null;  // 默认 Agent（用于非 Team 任务）
+  /**
+   * @param {object} options - 配置选项
+   * @param {string} [options.id='default'] - WorkSpace ID
+   * @param {string} [options.name='默认工作空间'] - WorkSpace 名称
+   * @param {string} [options.configPath] - 配置文件路径（兼容旧配置）
+   * @param {object} [options.defaultMemberConfig] - 默认 Member 配置
+   * @param {SystemConfig} [options.systemConfig] - 系统配置实例
+   */
+  constructor(options = {}) {
+    this.id = options.id || 'default';
+    this.name = options.name || '默认工作空间';
+    this.description = options.description || '';
+    this.configPath = options.configPath || null;
+
+    // 系统配置
+    this.systemConfig = options.systemConfig || getSystemConfig();
+
+    // Members 集合: id -> Member
+    this.members = new Map();
+
+    // 默认 Member（管理者/执行者）
+    this.defaultMember = null;
+
+    // 当前活跃 Member（执行任务的 Member）
+    this.activeMemberId = null;
+
+    // 配置
+    this.config = null;
   }
 
   /**
-   * 初始化系统
-   * 加载配置并创建 Teams
+   * 初始化 WorkSpace
+   * 加载配置并创建 Members
    */
   async initialize() {
-    console.log('\n🚀 WorkSpace 初始化中...\n');
+    console.log(`\n🚀 WorkSpace 初始化中: ${this.name}`);
+    console.log('─'.repeat(50));
 
-    // 加载配置
-    const config = this.loadConfig();
+    // 优先使用 SystemConfig 加载配置
+    const workspaceConfig = this.systemConfig.getWorkspace(this.id);
+    const membersFromConfig = this.systemConfig.getWorkspaceMembers(this.id);
 
-    // 创建 Teams
-    for (const teamConfig of Object.values(config.teams)) {
-      const team = new Team(teamConfig.id, teamConfig);
-      this.teams.set(team.id, team);
-      console.log(`✓ Team 创建成功: ${team.name} (${team.members.length} members)`);
+    if (membersFromConfig.length > 0) {
+      // 使用 SystemConfig 中的成员配置
+      for (const memberConfig of membersFromConfig) {
+        await this.addMember(memberConfig);
+      }
+    } else {
+      // 降级：使用旧的配置文件方式
+      this.config = this.loadConfig();
+      await this.createDefaultMember();
+      if (this.config?.members) {
+        for (const memberConfig of Object.values(this.config.members)) {
+          await this.addMember(memberConfig);
+        }
+      }
     }
 
-    console.log(`\n📦 共加载 ${this.teams.size} 个 Teams`);
+    console.log('─'.repeat(50));
+    console.log(`✅ 初始化完成: ${this.members.size} 个 Member(s)`);
+    console.log('');
 
-    // 列出所有 Teams
-    this.listTeams();
+    // 列出所有 Members
+    this.listMembers();
   }
 
   /**
-   * 加载 Team 配置
+   * 加载配置文件
    */
   loadConfig() {
     try {
-      const configData = readFileSync(join(process.cwd(), this.configPath), 'utf-8');
-      return JSON.parse(configData);
+      if (existsSync(this.configPath)) {
+        const configData = readFileSync(this.configPath, 'utf-8');
+        return JSON.parse(configData);
+      }
     } catch (error) {
-      console.error(`❌ 配置加载失败: ${error.message}`);
-      return { teams: {} };
+      console.warn(`⚠️ 配置加载失败: ${error.message}`);
     }
+    return { members: {} };
+  }
+
+  /**
+   * 创建默认 Member（管理者/执行者）
+   */
+  async createDefaultMember() {
+    const defaultConfig = this.config?.defaultMember || {
+      id: 'default',
+      name: '管理者',
+      role: '工作空间管理者和执行者',
+      skills: [],
+    };
+
+    this.defaultMember = new Member(defaultConfig.id, {
+      role: defaultConfig.role || '管理者',
+      skills: defaultConfig.skills || [],
+      name: defaultConfig.name,
+    });
+
+    this.members.set(defaultConfig.id, this.defaultMember);
+    console.log(`✓ 默认 Member 创建: ${this.defaultMember.name} (${this.defaultMember.id})`);
+  }
+
+  /**
+   * 添加 Member 到 WorkSpace
+   * @param {object} memberConfig - Member 配置
+   * @param {string} memberConfig.id - Member ID
+   * @param {string} memberConfig.name - Member 名称
+   * @param {string} memberConfig.role - Member 角色
+   * @param {Array} [memberConfig.skills] - Member 技能列表
+   * @returns {Promise<Member>} 创建的 Member 实例
+   */
+  async addMember(memberConfig) {
+    if (this.members.has(memberConfig.id)) {
+      console.warn(`⚠️ Member 已存在: ${memberConfig.id}`);
+      return this.members.get(memberConfig.id);
+    }
+
+    const member = new Member(memberConfig.id, {
+      role: memberConfig.role || '成员',
+      skills: memberConfig.skills || [],
+      name: memberConfig.name,
+    });
+
+    this.members.set(memberConfig.id, member);
+    console.log(`✓ Member 添加: ${member.name || memberConfig.role} (${member.id})`);
+
+    return member;
+  }
+
+  /**
+   * 从 WorkSpace 移除 Member
+   * @param {string} memberId - Member ID
+   * @returns {boolean} 是否成功移除
+   */
+  removeMember(memberId) {
+    if (memberId === 'default') {
+      console.warn(`⚠️ 不能移除默认 Member`);
+      return false;
+    }
+
+    if (!this.members.has(memberId)) {
+      console.warn(`⚠️ Member 不存在: ${memberId}`);
+      return false;
+    }
+
+    const member = this.members.get(memberId);
+    this.members.delete(memberId);
+    console.log(`✓ Member 移除: ${member.name || memberId}`);
+
+    // 清理活跃状态
+    if (this.activeMemberId === memberId) {
+      this.activeMemberId = null;
+    }
+
+    return true;
   }
 
   /**
    * 提交任务（统一接口）
+   *
+   * 任务路由逻辑：
+   * - 指定 memberId → 交给指定 Member
+   * - 指定 memberIds → 多个 Member 协作
+   * - 不指定 → 交给 defaultMember（默认）
+   *
    * @param {object|string} task - 任务对象或任务描述
-   * @param {string} [task.description] - 任务描述（如果 task 是字符串，则直接使用）
-   * @param {string} [task.teamId] - 指定 Team ID（可选）
+   * @param {string} [task.description] - 任务描述
+   * @param {string} [task.memberId] - 指定 Member ID
+   * @param {Array<string>} [task.memberIds] - 多个 Member ID（协作执行）
+   * @param {object} [task.options] - 执行选项
    * @returns {Promise<object>} 任务执行结果
    */
   async submitTask(task) {
     // 如果 task 是字符串，转换为对象格式
     const taskObj = typeof task === 'string' ? { description: task } : task;
-    const { description, teamId } = taskObj;
+    const { description, memberId, memberIds, options = {} } = taskObj;
 
-    if (teamId) {
-      // 有 teamId：交给指定 Team
-      return await this.handleTaskWithTeam(teamId, description);
+    // 确定执行者
+    if (memberIds && memberIds.length > 0) {
+      // 多 Member 协作
+      return await this.executeWithMembers(memberIds, description, options);
+    } else if (memberId) {
+      // 指定 Member
+      return await this.executeWithMember(memberId, description, options);
     } else {
-      // 没有 teamId：交给 Agent
-      return await this.handleTaskWithAgent(description);
+      // 默认 Member
+      return await this.executeWithMember('default', description, options);
     }
   }
 
   /**
-   * 使用指定 Team 处理任务
-   * @param {string} teamId - Team ID
+   * 使用指定 Member 执行任务
+   * @param {string} memberId - Member ID
    * @param {string} task - 任务描述
+   * @param {object} options - 执行选项
    * @returns {Promise<object>} 任务执行结果
    */
-  async handleTaskWithTeam(teamId, task) {
-    const team = this.teams.get(teamId);
+  async executeWithMember(memberId, task, options = {}) {
+    const member = this.members.get(memberId);
 
-    if (!team) {
+    if (!member) {
       return {
         success: false,
-        error: `❌ Team "${teamId}" 不存在`,
-        availableTeams: this.getAllTeams().map(t => ({ id: t.id, name: t.name })),
+        error: `Member "${memberId}" 不存在`,
+        availableMembers: this.getMemberSummaries(),
       };
     }
 
-    console.log(`\n📋 提交任务到 Team: ${team.name}`);
-
-    // 如果 Team 未激活，先进入
-    if (!team.isActive) {
-      await team.enter();
+    console.log(`\n📋 执行任务: ${member.name || memberId}`);
+    if (options.verbose) {
+      console.log(`   技能: ${member.getSkillNames().join(', ') || '无'}`);
     }
 
-    // 提交任务给 Team
-    const result = await team.submitTask(task);
+    this.activeMemberId = memberId;
 
-    return {
-      success: true,
-      executor: 'Team',
-      executorName: team.name,
-      teamId: team.id,
-      result,
-    };
+    try {
+      const result = await member.execute(task, {
+        ...options,
+        verbose: options.verbose || false,
+      });
+
+      return {
+        success: true,
+        executor: 'Member',
+        executorName: member.name || memberId,
+        memberId: member.id,
+        result,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        executor: 'Member',
+        executorName: member.name || memberId,
+        memberId: member.id,
+        error: error.message,
+      };
+    }
   }
 
   /**
-   * 使用 Agent 处理任务
+   * 多个 Member 协作执行任务
+   * @param {Array<string>} memberIds - Member IDs
    * @param {string} task - 任务描述
+   * @param {object} options - 执行选项
    * @returns {Promise<object>} 任务执行结果
    */
-  async handleTaskWithAgent(task) {
-    console.log(`\n📋 提交任务到 Agent`);
+  async executeWithMembers(memberIds, task, options = {}) {
+    console.log(`\n🤝 协作执行任务: ${memberIds.length} 个 Member(s)`);
 
-    // 获取或创建默认 Agent
-    if (!this.defaultAgent) {
-      this.defaultAgent = new Agent({
-        name: 'WorkSpace Agent',
-        role: '智能助手',
-        verbose: false,
-      });
+    const results = [];
+    const membersUsed = [];
+
+    for (const memberId of memberIds) {
+      const member = this.members.get(memberId);
+
+      if (!member) {
+        console.warn(`⚠️ Member 不存在，跳过: ${memberId}`);
+        continue;
+      }
+
+      console.log(`   → 调用: ${member.name || memberId}`);
+
+      try {
+        const result = await member.execute(task, {
+          ...options,
+          verbose: false,
+        });
+
+        results.push({
+          memberId,
+          memberName: member.name,
+          result,
+        });
+        membersUsed.push(memberId);
+      } catch (error) {
+        console.error(`   ❌ Member 执行失败: ${error.message}`);
+        results.push({
+          memberId,
+          memberName: member.name,
+          error: error.message,
+        });
+      }
     }
 
-    // 执行任务
-    const { result } = await this.defaultAgent.run(task);
+    // 整合结果
+    const finalResult = results.length === 1
+      ? results[0].result
+      : results.map(r => r.result || r.error).join('\n\n');
 
     return {
       success: true,
-      executor: 'Agent',
-      executorName: this.defaultAgent.name,
-      result,
+      executor: 'Members',
+      membersUsed,
+      result: finalResult,
+      detailedResults: results,
     };
   }
 
   /**
-   * 创建新的 Team
-   * @param {object} teamConfig - Team 配置
-   * @param {string} teamConfig.id - Team ID
-   * @param {string} teamConfig.name - Team 名称
-   * @param {string} teamConfig.description - Team 描述
-   * @param {Array} teamConfig.teamMembers - Members 配置
-   * @returns {Promise<Team>} 创建的 Team 实例
+   * 使用 defaultMember 执行任务
+   * @param {string} task - 任务描述
+   * @param {object} options - 执行选项
+   * @returns {Promise<object>} 任务执行结果
    */
-  async createTeam(teamConfig) {
-    const team = new Team(teamConfig.id, teamConfig);
-    await team.initialize();
-    this.teams.set(team.id, team);
-
-    console.log(`✓ Team 创建成功: ${team.name} (${team.members.length} members)`);
-
-    return team;
+  async executeDefault(task, options = {}) {
+    return await this.executeWithMember('default', task, options);
   }
 
   /**
-   * 销毁 Team
-   * @param {string} teamId - Team ID
-   * @returns {boolean} 是否成功销毁
+   * 获取所有 Members
+   * @returns {Array<Member>} 所有 Member 实例
    */
-  destroyTeam(teamId) {
-    const team = this.teams.get(teamId);
-    if (!team) {
-      console.log(`❌ Team 不存在: ${teamId}`);
-      return false;
-    }
-
-    // 先退出 Team（如果用户在其中）
-    if (this.currentTeamId === teamId) {
-      team.exit();
-      this.currentTeamId = null;
-    }
-
-    this.teams.delete(teamId);
-    console.log(`✓ Team 已销毁: ${teamId}`);
-
-    return true;
+  getAllMembers() {
+    return Array.from(this.members.values());
   }
 
   /**
-   * 进入 Team
-   * @param {string} teamId - Team ID
-   * @returns {Promise<boolean>} 是否成功进入
+   * 获取指定 Member
+   * @param {string} memberId - Member ID
+   * @returns {Member|null} Member 实例
    */
-  async enterTeam(teamId) {
-    const team = this.teams.get(teamId);
-    if (!team) {
-      console.log(`\n❌ Team "${teamId}" 不存在`);
-      return false;
-    }
-
-    // 如果在其他 Team，先退出
-    if (this.currentTeamId && this.currentTeamId !== teamId) {
-      const currentTeam = this.teams.get(this.currentTeamId);
-      await currentTeam.exit();
-    }
-
-    // 进入新 Team
-    await team.enter();
-    this.currentTeamId = teamId;
-
-    return true;
+  getMember(memberId) {
+    return this.members.get(memberId) || null;
   }
 
   /**
-   * 退出当前 Team
+   * 获取默认 Member
+   * @returns {Member} 默认 Member
    */
-  async exitTeam() {
-    if (!this.currentTeamId) {
-      console.log('\n📍 你当前不在任何 Team 中');
-      return;
-    }
-
-    const team = this.teams.get(this.currentTeamId);
-    await team.exit();
-    this.currentTeamId = null;
+  getDefaultMember() {
+    return this.defaultMember;
   }
 
   /**
-   * 列出所有 Team 信息
+   * 获取 Member 概要信息
+   * @returns {Array<object>} Member 信息列表
    */
-  listTeams() {
-    const teams = this.getAllTeams();
-    const currentTeamId = this.currentTeamId;
+  getMemberSummaries() {
+    return this.getAllMembers().map(m => ({
+      id: m.id,
+      name: m.name,
+      role: m.role,
+      skills: m.getSkillNames(),
+    }));
+  }
 
-    console.log('\n📋 可用的 Teams：\n');
+  /**
+   * 列出所有 Members
+   */
+  listMembers() {
+    const members = this.getAllMembers();
 
-    for (const team of teams) {
-      const isCurrent = team.id === currentTeamId ? ' [当前]' : '';
-      const memberCount = team.members.length;
-      const capabilities = team.getCapabilities().join(', ') || '无';
+    console.log(`\n📋 Members (${members.length}):\n`);
 
-      console.log(`  ${team.name} (${team.id})${isCurrent}`);
-      console.log(`    描述: ${team.description || '无'}`);
-      console.log(`    Members: ${memberCount} members`);
-      console.log(`    能力: ${capabilities}`);
+    for (const member of members) {
+      const isDefault = member.id === 'default' ? ' [默认]' : '';
+      const isActive = member.id === this.activeMemberId ? ' [活跃]' : '';
+      const skills = member.getSkillNames().join(', ') || '无';
+
+      console.log(`  ${member.name}${isDefault}${isActive}`);
+      console.log(`    ID: ${member.id} | 角色: ${member.role}`);
+      console.log(`    技能: ${skills}`);
       console.log('');
     }
   }
 
   /**
-   * 获取所有 Teams
-   * @returns {Array<Team>} 所有 Team 实例
+   * 获取 WorkSpace 信息
+   * @returns {object} WorkSpace 信息
    */
-  getAllTeams() {
-    return Array.from(this.teams.values());
-  }
-
-  /**
-   * 获取指定 Team
-   * @param {string} teamId - Team ID
-   * @returns {Team|null} Team 实例
-   */
-  getTeam(teamId) {
-    return this.teams.get(teamId);
-  }
-
-  /**
-   * 获取当前活跃 Team
-   * @returns {Team|null} 当前活跃 Team 实例
-   */
-  getCurrentTeam() {
-    if (!this.currentTeamId) {
-      return null;
-    }
-    return this.teams.get(this.currentTeamId);
+  getInfo() {
+    return {
+      id: this.id,
+      name: this.name,
+      description: this.description,
+      memberCount: this.members.size,
+      members: this.getMemberSummaries(),
+      defaultMember: this.defaultMember ? {
+        id: this.defaultMember.id,
+        name: this.defaultMember.name,
+        role: this.defaultMember.role,
+      } : null,
+    };
   }
 }

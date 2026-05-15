@@ -1,39 +1,85 @@
 # MEMORY.md —— jsClaw 项目长期记忆
 
 ## 项目位置
-- **jsClaw**：`D:/jsClaw`（JavaScript Agent 框架，ES Module）
+- **jsClaw**：`D:/.ClawSpace/pdSoftware/jsClaw`（JavaScript Agent 框架，ES Module）
 - **pyClaw**：`D:/pyClaw`（Python 版 Agent 框架）
 
 ## 技术栈
 - Node.js v24，`"type": "module"`（ES Module）
-- 依赖：`openai`, `dotenv`, `open-websearch`
+- 依赖：`openai`, `dotenv`, `open-websearch`, `playwright`, `puppeteer`
 - LLM：阿里云千问 qwen-plus（OpenAI 兼容接口）
 - API Key 配置：`.env` 文件 `OPENAI_API_KEY=sk-45d478ddd7b94b0d838d9fce6f1e3762`
 
 ## 架构
 
-### WorkSpace —— 统一工作空间入口
-- `src/WorkSpace.js` — WorkSpace 核心实现，负责：
-  - Team 生命周期管理（createTeam, destroyTeam, initialize）
-  - 任务路由（submitTask: 带 teamId → Team，不带 → Agent）
-  - Team 访问控制（enterTeam, exitTeam, listTeams）
-
-### Team 系统 —— 任务执行场所
-- **Team** — 持久化工作场所，可常驻一组 TeamMembers
-- **TeamMember** — 具有系统基础技能和动态角色技能的 Agent
-- **TeamLeader** — Team 内的任务编排者，组织 TeamMembers 协作执行
-- **TeamRegistry** — Team 注册和管理，处理 Team 进入/退出
+### WorkSpace + Member 架构（最新）
+- **WorkSpace** — 统一工作空间入口，直接管理多个 Member
+- **Member** — 基于 Agent，由 WorkSpace 直接调度
+- **defaultMember** — 每个 WorkSpace 默认有一个管理者/执行者
+- **配置文件**：`WorkSpaceConfig.json`
 
 **任务路由（WorkSpace）：**
-- 带 teamId → 交给指定 Team 执行
-- 不带 teamId → 交给 Agent 执行
-- 进入 Team 后 → Team 内任务由 TeamLeader 组织 TeamMembers 执行
+- 指定 memberIds → 多个 Member 协作执行
+- 指定 memberId → 交给指定 Member 执行
+- 无指定 → 交给 defaultMember 执行
 
-**配置文件：** `src/TeamConfig.json`
+### Member 人格系统（2026-05-15 新增）
+Member 支持从 `identity.md` 和 `soul.md` 加载身份和性格：
 
-**使用文档：**
-- `WORKSPACE.md` - WorkSpace 使用文档
-- `TEAM.md` - Team 使用文档
+**文件位置**：
+```
+members/<memberId>/
+├── identity.md   # 身份定义
+└── soul.md       # 性格特征
+```
+
+**已有人格文件**：
+- `members/default/` - 管理者
+- `members/researcher/` - 研究员
+- `members/coder/` - 开发者
+- `members/writer/` - 作者
+
+**核心方法**：
+- `buildSystemPrompt()` - 构建完整的 system prompt（身份+性格+角色+技能）
+- `getPersonaPrompt()` - 获取带人格的 prompt
+
+### SystemConfig 系统配置（2026-05-15 新增）
+
+统一管理系统配置，支持多 workspace 和 member 定义：
+
+**核心文件**：
+- `config/system.json` - 主配置文件
+- `config/workspaces/*.json` - workspace 独立配置
+- `src/SystemConfig.js` - 配置加载器
+
+**主配置结构**：
+```json
+{
+  "version": "1.0.0",
+  "paths": { "workspaces": "workspaces/", "members": "members/", "data": "data/", "logs": "logs/" },
+  "workspaces": { "default": { "id": "default", "name": "默认工作空间", "configPath": "..." }},
+  "members": { "default": { "id": "default", "name": "管理者", "role": "...", "identityPath": "...", "soulPath": "..." }},
+  "system": { "defaultMemberId": "default", "defaultWorkspaceId": "default", "maxRounds": 10, "contextManager": {...}, "goalTracker": {...} }
+}
+```
+
+**API**：
+- `getSystemConfig()` - 获取配置单例
+- `config.getWorkspace(id)` - 获取 workspace 配置
+- `config.getWorkspaceMembers(id)` - 获取 workspace 的 members
+- `config.getMember(id, workspaceId)` - 获取 member 配置
+- `config.getDefaultWorkspace()` / `getDefaultMember()` - 获取默认值
+
+**使用文档（集中在 docs/）：**
+- `docs/WORKSPACE.md` - WorkSpace + Member 架构详解
+- `docs/AGENT.md` - Agent 面向对象设计
+- `docs/CONTEXT_MANAGER.md` - 上下文管理器
+- `docs/GOAL_TRACKER.md` - 目标追踪器
+- `docs/TEAM.md` - Team 协作系统（Legacy）
+
+### 旧架构（TeamLab + Team）— Legacy
+- Team.js 和相关代码仍保留，但不再推荐使用
+- 新项目应使用 WorkSpace + Member 架构
 
 ### Agent —— Think-Act 模式
 - `src/agent.js` — Agent 类，面向对象设计，支持无指引和有指引两种模式
@@ -121,12 +167,16 @@ git config --global core.quotePath false
 ## npm 命令
 ```bash
 npm start               # 启动 Agent
-npm run demo:team       # 运行 Team 系统演示
+npm run demo:workspace   # 运行 WorkSpace 演示
 npm run demo:agent      # 运行 Agent 类演示
 npm run skill:list      # 浏览 Skill 市场
 npm run skill:install -- <name>   # 安装 Skill
 npm run skill:remove  -- <name>   # 卸载 Skill
 npm run skill:installed           # 查看已安装
+npm run test             # 运行所有测试
+npm run test:ws          # 运行 WorkSpace + Member 测试
+npm run test:cm          # 运行 ContextManager 测试
+npm run test:gt          # 运行 GoalTracker 测试
 ```
 
 ## Agent 类 —— 面向对象设计
@@ -298,3 +348,94 @@ const result2 = await workspace.submitTask({
 - ✅ 不带 teamId 的任务正确交给 Agent
 - ✅ 带 teamId 的任务正确交给指定 Team
 - ✅ 进入 Team 后提交任务正常工作
+
+## ContextManager —— 上下文自动清理机制（P0）
+
+**实现时间**：2026-05-15
+
+**核心功能**：自动管理对话历史，控制 token 消耗，避免超出 LLM 上下文限制
+
+**核心策略**：
+1. 保留系统提示（不裁剪）
+2. 保留最近N轮完整对话（preserveRecent）
+3. 旧消息 → LLM摘要 或 简单裁剪
+4. 超过阈值自动触发（maxTokens）
+
+**相关文件**：
+- `src/ContextManager.js` — ContextManager 核心实现
+- `src/agent.js` — Agent 集成 ContextManager
+- `CONTEXT_MANAGER.md` — 使用文档
+
+**API**：
+```javascript
+// 独立使用
+const cm = new ContextManager({ maxTokens: 6000, preserveRecent: 4 });
+cm.prune(messages);           // 同步裁剪
+await cm.pruneAsync(messages); // 异步裁剪（LLM摘要）
+cm.estimateTokens(messages);   // 估算token
+cm.getStats();                // 统计信息
+
+// Agent集成（自动管理）
+const agent = new Agent({
+  contextManager: { maxTokens: 6000, preserveRecent: 4 }
+});
+const result = await agent.run('消息', { history: longHistory });
+```
+
+**测试结果**：
+- ✅ Token估算功能正常
+- ✅ 自动裁剪功能正常
+- ✅ Agent集成正常
+- ✅ 大规模裁剪测试通过（61条→5条，节省2699 tokens）
+
+**配置参数**：
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| maxTokens | 6000 | 最大保留token数 |
+| preserveRecent | 4 | 保留最近N轮对话 |
+| autoPrune | true | 是否自动裁剪 |
+| summaryModel | qwen-plus | LLM摘要模型 |
+
+## GoalTracker —— 目标保持机制（P1）
+
+**实现时间**：2026-05-15
+
+**核心功能**：追踪和管理长期目标，确保Agent在多轮对话中保持目标一致性
+
+**相关文件**：
+- `src/GoalTracker.js` — GoalTracker 核心实现
+- `src/agent.js` — Agent 集成 GoalTracker
+- `GOAL_TRACKER.md` — 使用文档
+
+**API**：
+```javascript
+// 独立使用
+const tracker = new GoalTracker();
+tracker.createGoal('目标描述', { priority: 3, tags: ['标签'] });
+tracker.addCheckpoint(goalId, '检查点');
+tracker.completeCheckpoint(goalId, cpId);
+tracker.addAchievement(goalId, '成就');
+tracker.addBlocker(goalId, '阻碍');
+tracker.getGoalContext();  // 生成注入Agent的上下文
+
+// Agent集成（自动注入目标）
+const agent = new Agent({
+  goalTracker: { autoSave: true }
+});
+agent.createGoal('分析市场');
+agent.addGoalCheckpoint('获取数据');
+agent.updateGoalProgress(50);
+await agent.run('生成报告');  // 自动注入目标上下文
+```
+
+**目标状态**：active, completed, paused, cancelled, failed
+
+**优先级**：LOW(1), NORMAL(2), HIGH(3), CRITICAL(4)
+
+**测试结果**：
+- ✅ 目标创建、切换、状态管理正常
+- ✅ 检查点添加、完成、进度更新正常
+- ✅ 成就/阻碍记录正常
+- ✅ 上下文生成正常
+- ✅ 事件监听正常
+- ✅ Agent集成正常

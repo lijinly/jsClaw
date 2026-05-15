@@ -181,15 +181,18 @@ jsClaw/
 │   ├── server.js         # Web 服务器
 │   ├── llm.js            # LLM 客户端封装
 │   ├── agent.js          # Agent 核心类
-│   ├── Team.js           # Team 协作系统
-│   ├── Member.js         # Team 成员
+│   ├── Member.js         # Member 类（基于 Agent）
 │   ├── WorkSpace.js      # 工作空间
+│   ├── ContextManager.js  # 上下文管理器
+│   ├── GoalTracker.js    # 目标追踪器
 │   ├── skillRegistry.js  # 技能注册管理
-│   ├── marketplace.js    # 技能市场
-│   ├── Config.json       # 团队配置
+│   ├── marketplace.js     # 技能市场
+│   ├── WorkSpaceConfig.json  # 工作空间配置
+│   ├── tests/            # 测试文件
 │   └── skills/
 │       ├── builtins.js   # 内置技能
 │       └── plugins/      # 社区技能
+├── docs/                 # 设计文档
 ├── .env                  # 环境配置
 └── package.json
 ```
@@ -211,9 +214,13 @@ npm run skill:installed  # 查看已安装技能
 
 ## 📖 详细文档
 
-- [TEAM.md](./TEAM.md) - Team 协作系统详解
-- [WORKSPACE.md](./WORKSPACE.md) - WorkSpace 使用指南
-- [AGENT.md](./AGENT.md) - Agent 面向对象设计
+详细设计文档集中在 `docs/` 目录下：
+
+- [docs/WORKSPACE.md](./docs/WORKSPACE.md) - WorkSpace + Member 架构详解
+- [docs/AGENT.md](./docs/AGENT.md) - Agent 面向对象设计
+- [docs/CONTEXT_MANAGER.md](./docs/CONTEXT_MANAGER.md) - 上下文管理器
+- [docs/GOAL_TRACKER.md](./docs/GOAL_TRACKER.md) - 目标追踪器
+- [docs/TEAM.md](./docs/TEAM.md) - Team 协作系统（Legacy）
 
 ---
 

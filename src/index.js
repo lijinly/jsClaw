@@ -4,8 +4,11 @@
 import 'dotenv/config';
 import readline from 'readline';
 import { initLLM } from './llm.js';
-import { Agent } from './agent.js';
+import { initDefaultWorkspace, executeInDefaultWorkspace, getDefaultWorkspace } from './globalWorkspace.js';
 import './skills/builtins.js';  // 加载内置技能（含 list_skills、read_skill）
+
+// 导出给外部使用
+export { getDefaultWorkspace, initDefaultWorkspace, executeInDefaultWorkspace };
 
 initLLM();
 
@@ -16,13 +19,16 @@ const rl = readline.createInterface({
 
 const history = [];
 
-// 创建 Agent 实例
-const agent = new Agent({
-  name: '助手',
-  role: '智能助手',
-});
-
 console.log('\n🚀 jsClaw Agent 启动！（输入 exit 退出）\n');
+
+// 初始化全局默认工作空间
+initDefaultWorkspace().then(workspace => {
+  console.log(`✅ 全局工作空间已就绪 (${workspace.members.size} Members)\n`);
+  prompt();
+}).catch(err => {
+  console.error('❌ 工作空间初始化失败:', err.message);
+  prompt();
+});
 
 function prompt() {
   rl.question('你: ', async (input) => {
@@ -30,17 +36,16 @@ function prompt() {
     if (!input) return prompt();
     if (input.toLowerCase() === 'exit') { rl.close(); return; }
 
-  try {
-    const { result } = await agent.run(input, { history });
-    console.log(`\nAgent: ${result}\n`);
+    try {
+      // 使用全局工作空间执行任务
+      const result = await executeInDefaultWorkspace(input, { history });
+      console.log(`\nAgent: ${result.result || result.error}\n`);
       // 保存对话历史
       history.push({ role: 'user', content: input });
-      history.push({ role: 'assistant', content: result });
+      history.push({ role: 'assistant', content: result.result });
     } catch (err) {
       console.error('错误:', err.message);
     }
     prompt();
   });
 }
-
-prompt();
