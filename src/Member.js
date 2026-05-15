@@ -65,10 +65,11 @@ export class Member extends Agent {
 
   /**
    * 构建完整的 System Prompt
-   * 包含：身份 + 性格 + 角色描述
+   * 包含：身份 + 性格 + 角色描述 + 工作空间记忆
+   * @param {string} [workspaceMemory] - 工作空间记忆内容（可选）
    * @returns {string} 完整的 system prompt
    */
-  buildSystemPrompt() {
+  buildSystemPrompt(workspaceMemory = '') {
     const parts = [];
 
     // 1. 身份描述
@@ -91,15 +92,21 @@ export class Member extends Agent {
       parts.push(`# 可用技能\n你拥有以下技能：${this.allSkills.join(', ')}`);
     }
 
+    // 5. 工作空间记忆（如果有）
+    if (workspaceMemory && workspaceMemory.trim()) {
+      parts.push(`# 工作空间记忆\n${workspaceMemory.trim()}`);
+    }
+
     return parts.join('\n\n');
   }
 
   /**
    * 获取带人格的 system prompt（供 Agent 使用）
+   * @param {string} [workspaceMemory] - 工作空间记忆内容（可选）
    * @returns {string} system prompt
    */
-  getPersonaPrompt() {
-    return this.buildSystemPrompt();
+  getPersonaPrompt(workspaceMemory = '') {
+    return this.buildSystemPrompt(workspaceMemory);
   }
 
   /**
@@ -137,16 +144,17 @@ export class Member extends Agent {
    * @param {boolean} [options.verbose] - 是否打印详细日志
    * @param {Array} [options.history] - 对话历史
    * @param {boolean} [options.usePersona=true] - 是否使用 Member 的人格配置
+   * @param {string} [options.workspaceMemory] - 工作空间记忆内容
    * @returns {Promise<object>} { thinking, actions, result }
    */
   async execute(task, options = {}) {
-    const { guidance, verbose = false, history = [], usePersona = true } = options;
+    const { guidance, verbose = false, history = [], usePersona = true, workspaceMemory = '' } = options;
 
     this.taskCount++;
     this.isActive = true;
 
-    // 构建 system prompt（优先使用 Member 的人格配置）
-    const systemPrompt = usePersona ? this.buildSystemPrompt() : null;
+    // 构建 system prompt（优先使用 Member 的人格配置，包含工作空间记忆）
+    const systemPrompt = usePersona ? this.buildSystemPrompt(workspaceMemory) : null;
 
     if (verbose) {
       console.log(`\n🔧 [Member: ${this.name}] 执行任务 #${this.taskCount}`);

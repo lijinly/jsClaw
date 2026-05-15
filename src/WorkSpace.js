@@ -3,6 +3,7 @@
 // ─────────────────────────────────────────────
 import { Member } from './Member.js';
 import { SystemConfig, getSystemConfig } from './SystemConfig.js';
+import { WorkspaceMemory } from './WorkspaceMemory.js';
 import { readFileSync, existsSync } from 'fs';
 import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
@@ -17,12 +18,14 @@ const __dirname = dirname(__filename);
  * - WorkSpace 直接管理多个 Member
  * - 默认有一个 defaultMember 作为管理者和执行者
  * - 多个 Member 可在管理者协调下并行/协作工作
+ * - 自动加载工作空间记忆到 system prompt
  *
  * 职责：
  * 1. 管理 Members 的生命周期
  * 2. 协调多个 Member 执行任务
  * 3. 默认使用 defaultMember 执行简单任务
  * 4. 复杂任务可分发给多个 Member 协作
+ * 5. 管理工作空间记忆
  */
 export class WorkSpace {
   /**
@@ -52,11 +55,15 @@ export class WorkSpace {
 
     // 配置
     this.config = null;
+
+    // 工作空间记忆
+    this.memory = null;
+    this.memoryDir = null;
   }
 
   /**
    * 初始化 WorkSpace
-   * 加载配置并创建 Members
+   * 加载配置、记忆并创建 Members
    */
   async initialize() {
     console.log(`\n🚀 WorkSpace 初始化中: ${this.name}`);
@@ -66,6 +73,10 @@ export class WorkSpace {
     const workspaceConfig = this.systemConfig.getWorkspace(this.id);
     const membersFromConfig = this.systemConfig.getWorkspaceMembers(this.id);
 
+    // 加载工作空间记忆
+    this._initializeMemory();
+
+    // 加载 Members
     if (membersFromConfig.length > 0) {
       // 使用 SystemConfig 中的成员配置
       for (const memberConfig of membersFromConfig) {
@@ -84,10 +95,59 @@ export class WorkSpace {
 
     console.log('─'.repeat(50));
     console.log(`✅ 初始化完成: ${this.members.size} 个 Member(s)`);
+    if (this.memory) {
+      console.log(`   记忆: ${this.memory.getCount()} 条已加载`);
+    }
     console.log('');
 
     // 列出所有 Members
     this.listMembers();
+  }
+
+  /**
+   * 初始化工作空间记忆
+   * @private
+   */
+  _initializeMemory() {
+    // 从 SystemConfig 获取记忆目录
+    this.memoryDir = this.systemConfig.getWorkspaceMemoryPath(this.id);
+    
+    if (this.memoryDir) {
+      this.memory = new WorkspaceMemory(this.memoryDir);
+      this.memory.load();
+    }
+  }
+
+  /**
+   * 获取工作空间记忆
+   * @returns {WorkspaceMemory|null}
+   */
+  getMemory() {
+    return this.memory;
+  }
+
+  /**
+   * 获取用于 system prompt 的记忆内容
+   * @returns {string}
+   */
+  getMemoryForPrompt() {
+    if (!this.memory) return '';
+    return this.memory.getForSystemPrompt();
+  }
+
+  /**
+   * 保存内容为工作空间记忆
+   * @param {string} content - 记忆内容
+   * @param {object} options - 选项
+   * @param {string} [options.filename] - 文件名
+   * @param {string} [options.category='general'] - 分类
+   */
+  saveMemory(content, options = {}) {
+    if (!this.memory) {
+      console.warn('⚠️ 工作空间记忆未初始化');
+      return;
+    }
+    this.memory.distill(content, options);
   }
 
   /**
@@ -243,10 +303,14 @@ export class WorkSpace {
     this.activeMemberId = memberId;
 
     try {
-      const result = await member.execute(task, {
+      // 注入工作空间记忆到选项中
+      const promptOptions = {
         ...options,
         verbose: options.verbose || false,
-      });
+        workspaceMemory: this.getMemoryForPrompt(),
+      };
+
+      const result = await member.execute(task, promptOptions);
 
       return {
         success: true,
@@ -293,6 +357,7 @@ export class WorkSpace {
         const result = await member.execute(task, {
           ...options,
           verbose: false,
+          workspaceMemory: this.getMemoryForPrompt(),
         });
 
         results.push({
@@ -408,6 +473,10 @@ export class WorkSpace {
         id: this.defaultMember.id,
         name: this.defaultMember.name,
         identity: this.defaultMember.identity,
+      } : null,
+      memory: this.memory ? {
+        count: this.memory.getCount(),
+        dir: this.memoryDir,
       } : null,
     };
   }
