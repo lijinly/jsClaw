@@ -4,12 +4,8 @@
 import { Agent } from './agent.js';
 import { getToolDefinitions, executeToolCalls } from './skillRegistry.js';
 import { chat } from './llm.js';
-import { readFileSync, existsSync } from 'fs';
-import { join, dirname } from 'path';
+import { dirname } from 'path';
 import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 /**
  * Member 类 - 工作空间中的执行成员
@@ -19,105 +15,52 @@ const __dirname = dirname(__filename);
  * - 由 WorkSpace 直接管理和协调
  * - 拥有系统基础技能（所有 Member 共享）
  * - 可动态加载角色技能
- * - 支持从 identity.md 和 soul.md 加载身份和性格特征
+ * - 支持从配置中加载 identity 和 soul 字符串
  *
- * 与旧架构的区别：
- * - 不再由 Team 协调，直接由 WorkSpace 调度
- * - 简化了层级关系
+ * 配置字段（来自 workspace JSON）：
+ * - id: Member ID
+ * - name: 显示名称
+ * - identity: 身份描述字符串
+ * - soul: 性格描述字符串
+ * - skills: 可用技能数组
  */
 export class Member extends Agent {
   /**
    * @param {string} id - Member ID
    * @param {object} config - Member 配置
-   * @param {string} config.role - Member 角色描述
+   * @param {string} config.name - Member 显示名称
+   * @param {string} config.identity - 身份描述
+   * @param {string} config.soul - 性格描述
    * @param {Array<string>} [config.skills] - 角色技能列表
-   * @param {string} [config.name] - Member 显示名称
-   * @param {string} [config.identityPath] - identity.md 文件路径（可选）
-   * @param {string} [config.soulPath] - soul.md 文件路径（可选）
+   * @param {number} [config.maxRounds] - 最大执行轮次
    */
   constructor(id, config) {
-    // 先调用父类构造函数
-    super({
+    // 合并配置，提供默认值
+    const mergedConfig = {
       name: config.name || `Member(${id})`,
-      role: config.role || '成员',
+      role: config.identity || '成员',  // identity 作为 role
       verbose: config.verbose || false,
       maxRounds: config.maxRounds || 10,
-    });
+    };
 
-    // 在 super() 之后设置 Member 特有的属性
+    // 先调用父类构造函数
+    super(mergedConfig);
+
+    // Member 特有属性
     this.id = id;
-    this.name = config.name || `Member(${id})`;
-    this.role = config.role || '成员';
-    this.roleSkills = config.skills || [];
-
-    // 人格文件路径配置
-    this.identityPath = config.identityPath || null;
-    this.soulPath = config.soulPath || null;
-
-    // 加载身份和性格
-    this.identity = null;  // identity.md 内容
-    this.soul = null;      // soul.md 内容
+    this.identity = config.identity || '';   // 身份描述
+    this.soul = config.soul || '';           // 性格描述
+    this.roleSkills = config.skills || [];   // 角色技能
 
     // 加载系统基础技能
     this.baseSkills = this.loadBaseSkills();
 
-    // 加载角色技能
-    this.roleSkillsLoaded = this.loadRoleSkills(this.roleSkills);
-
     // 合并所有技能
-    this.allSkills = [...this.baseSkills, ...this.roleSkillsLoaded];
+    this.allSkills = [...this.baseSkills, ...this.roleSkills];
 
     // Member 状态
     this.isActive = false;
     this.taskCount = 0;
-
-    // 加载人格文件
-    this._loadPersonaFiles();
-  }
-
-  /**
-   * 加载身份和性格文件
-   * @private
-   */
-  _loadPersonaFiles() {
-    // 确定搜索路径
-    const searchPaths = [
-      // 1. 配置文件中的显式路径
-      this.identityPath,
-      this.soulPath,
-      // 2. 约定路径：members/<id>/identity.md 和 members/<id>/soul.md
-      join(__dirname, '..', 'members', this.id, 'identity.md'),
-      join(__dirname, '..', 'members', this.id, 'soul.md'),
-      // 3. 工作区根目录下的 members/<id>/
-      join(__dirname, '..', '..', 'members', this.id, 'identity.md'),
-      join(__dirname, '..', '..', 'members', this.id, 'soul.md'),
-    ].filter(Boolean);
-
-    // 加载 identity.md
-    for (const path of searchPaths.filter((_, i) => i % 2 === 0)) {
-      if (existsSync(path)) {
-        try {
-          this.identity = readFileSync(path, 'utf-8');
-          console.log(`✓ [${this.name}] 加载身份: ${path}`);
-          break;
-        } catch (e) {
-          // 继续尝试下一个路径
-        }
-      }
-    }
-
-    // 加载 soul.md
-    for (const path of searchPaths.filter((_, i) => i % 2 === 1)) {
-      if (existsSync(path)) {
-        try {
-          this.soul = readFileSync(path, 'utf-8');
-          console.log(`✓ [${this.name}] 加载性格: ${path}`);
-          break;
-        } catch (e) {
-          // 继续尝试下一个路径
-        }
-      }
-    }
   }
 
   /**
@@ -128,19 +71,19 @@ export class Member extends Agent {
   buildSystemPrompt() {
     const parts = [];
 
-    // 1. 身份描述（来自 identity.md）
+    // 1. 身份描述
     if (this.identity) {
       parts.push(`# 身份定义\n${this.identity}`);
     }
 
-    // 2. 性格特征（来自 soul.md）
+    // 2. 性格特征
     if (this.soul) {
       parts.push(`# 性格特征\n${this.soul}`);
     }
 
-    // 3. 基础角色描述（来自配置）
-    if (this.role) {
-      parts.push(`# 角色定位\n你是 ${this.name}。${this.role}`);
+    // 3. 角色描述
+    if (this.name) {
+      parts.push(`# 角色定位\n你是 ${this.name}。`);
     }
 
     // 4. 技能说明
@@ -169,15 +112,6 @@ export class Member extends Agent {
   }
 
   /**
-   * 动态加载角色技能
-   * 根据角色配置加载特定技能
-   */
-  loadRoleSkills(roleSkills) {
-    // 预留扩展：可从 plugins/ 动态加载
-    return roleSkills;
-  }
-
-  /**
    * 获取 Member 的技能清单
    * @returns {Array<string>} 技能名称列表
    */
@@ -202,7 +136,7 @@ export class Member extends Agent {
    * @param {object} [options.guidance] - 执行指引 { keyRequirements, suggestedTools, executionSteps }
    * @param {boolean} [options.verbose] - 是否打印详细日志
    * @param {Array} [options.history] - 对话历史
-   * @param {boolean} [options.usePersona=true] - 是否使用 Member 的身份/性格
+   * @param {boolean} [options.usePersona=true] - 是否使用 Member 的人格配置
    * @returns {Promise<object>} { thinking, actions, result }
    */
   async execute(task, options = {}) {
@@ -216,13 +150,9 @@ export class Member extends Agent {
 
     if (verbose) {
       console.log(`\n🔧 [Member: ${this.name}] 执行任务 #${this.taskCount}`);
-      console.log(`   角色: ${this.role}`);
       console.log(`   技能: ${this.allSkills.join(', ') || '无'}`);
       if (this.identity || this.soul) {
         console.log(`   人格: ${this.identity ? '✓ 身份' : ''} ${this.soul ? '✓ 性格' : ''}`);
-      }
-      if (guidance) {
-        console.log(`   Guidance: 已提供`);
       }
     }
 
@@ -342,7 +272,7 @@ export class Member extends Agent {
    * @private
    */
   async _actWithGuidance(userMessage, { systemPrompt, history, guidance, thinking, tools }) {
-    const actSystemPrompt = `${systemPrompt || `你是 ${this.role}。`}
+    const actSystemPrompt = `${systemPrompt || `你是 ${this.name}。`}
 
 用户问题：${userMessage}
 
@@ -408,7 +338,7 @@ ${thinking}
     return {
       id: this.id,
       name: this.name,
-      role: this.role,
+      role: this.identity,
       skillCount: this.allSkills.length,
       skills: this.allSkills,
       taskCount: this.taskCount,
@@ -424,7 +354,7 @@ ${thinking}
     return {
       id: this.id,
       name: this.name,
-      role: this.role,
+      role: this.identity,
       skillCount: this.allSkills.length,
     };
   }

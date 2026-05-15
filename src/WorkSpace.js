@@ -1,8 +1,7 @@
 // ─────────────────────────────────────────────
-//  WorkSpace —— 工作空间（无 Team 概念）
+//  WorkSpace —— 工作空间
 // ─────────────────────────────────────────────
 import { Member } from './Member.js';
-import { Agent } from './agent.js';
 import { SystemConfig, getSystemConfig } from './SystemConfig.js';
 import { readFileSync, existsSync } from 'fs';
 import { join, dirname, resolve } from 'path';
@@ -15,7 +14,6 @@ const __dirname = dirname(__filename);
  * WorkSpace 类 - 工作空间
  *
  * 架构设计：
- * - 用 WorkSpace 代替 Team 概念
  * - WorkSpace 直接管理多个 Member
  * - 默认有一个 defaultMember 作为管理者和执行者
  * - 多个 Member 可在管理者协调下并行/协作工作
@@ -32,7 +30,6 @@ export class WorkSpace {
    * @param {string} [options.id='default'] - WorkSpace ID
    * @param {string} [options.name='默认工作空间'] - WorkSpace 名称
    * @param {string} [options.configPath] - 配置文件路径（兼容旧配置）
-   * @param {object} [options.defaultMemberConfig] - 默认 Member 配置
    * @param {SystemConfig} [options.systemConfig] - 系统配置实例
    */
   constructor(options = {}) {
@@ -65,7 +62,7 @@ export class WorkSpace {
     console.log(`\n🚀 WorkSpace 初始化中: ${this.name}`);
     console.log('─'.repeat(50));
 
-    // 优先使用 SystemConfig 加载配置
+    // 使用 SystemConfig 加载配置
     const workspaceConfig = this.systemConfig.getWorkspace(this.id);
     const membersFromConfig = this.systemConfig.getWorkspaceMembers(this.id);
 
@@ -115,12 +112,13 @@ export class WorkSpace {
     const defaultConfig = this.config?.defaultMember || {
       id: 'default',
       name: '管理者',
-      role: '工作空间管理者和执行者',
+      identity: '工作空间管理者和执行者',
       skills: [],
     };
 
     this.defaultMember = new Member(defaultConfig.id, {
-      role: defaultConfig.role || '管理者',
+      identity: defaultConfig.identity || defaultConfig.role || '管理者',
+      soul: defaultConfig.soul || '',
       skills: defaultConfig.skills || [],
       name: defaultConfig.name,
     });
@@ -134,7 +132,8 @@ export class WorkSpace {
    * @param {object} memberConfig - Member 配置
    * @param {string} memberConfig.id - Member ID
    * @param {string} memberConfig.name - Member 名称
-   * @param {string} memberConfig.role - Member 角色
+   * @param {string} memberConfig.identity - Member 身份描述
+   * @param {string} [memberConfig.soul] - Member 性格描述
    * @param {Array} [memberConfig.skills] - Member 技能列表
    * @returns {Promise<Member>} 创建的 Member 实例
    */
@@ -145,13 +144,14 @@ export class WorkSpace {
     }
 
     const member = new Member(memberConfig.id, {
-      role: memberConfig.role || '成员',
+      name: memberConfig.name || `Member(${memberConfig.id})`,
+      identity: memberConfig.identity || memberConfig.role || '成员',
+      soul: memberConfig.soul || '',
       skills: memberConfig.skills || [],
-      name: memberConfig.name,
     });
 
     this.members.set(memberConfig.id, member);
-    console.log(`✓ Member 添加: ${member.name || memberConfig.role} (${member.id})`);
+    console.log(`✓ Member 添加: ${member.name} (${member.id})`);
 
     return member;
   }
@@ -174,7 +174,7 @@ export class WorkSpace {
 
     const member = this.members.get(memberId);
     this.members.delete(memberId);
-    console.log(`✓ Member 移除: ${member.name || memberId}`);
+    console.log(`✓ Member 移除: ${member.name}`);
 
     // 清理活跃状态
     if (this.activeMemberId === memberId) {
@@ -235,7 +235,7 @@ export class WorkSpace {
       };
     }
 
-    console.log(`\n📋 执行任务: ${member.name || memberId}`);
+    console.log(`\n📋 执行任务: ${member.name}`);
     if (options.verbose) {
       console.log(`   技能: ${member.getSkillNames().join(', ') || '无'}`);
     }
@@ -251,7 +251,7 @@ export class WorkSpace {
       return {
         success: true,
         executor: 'Member',
-        executorName: member.name || memberId,
+        executorName: member.name,
         memberId: member.id,
         result,
       };
@@ -259,7 +259,7 @@ export class WorkSpace {
       return {
         success: false,
         executor: 'Member',
-        executorName: member.name || memberId,
+        executorName: member.name,
         memberId: member.id,
         error: error.message,
       };
@@ -287,7 +287,7 @@ export class WorkSpace {
         continue;
       }
 
-      console.log(`   → 调用: ${member.name || memberId}`);
+      console.log(`   → 调用: ${member.name}`);
 
       try {
         const result = await member.execute(task, {
@@ -368,7 +368,7 @@ export class WorkSpace {
     return this.getAllMembers().map(m => ({
       id: m.id,
       name: m.name,
-      role: m.role,
+      identity: m.identity,
       skills: m.getSkillNames(),
     }));
   }
@@ -387,7 +387,7 @@ export class WorkSpace {
       const skills = member.getSkillNames().join(', ') || '无';
 
       console.log(`  ${member.name}${isDefault}${isActive}`);
-      console.log(`    ID: ${member.id} | 角色: ${member.role}`);
+      console.log(`    ID: ${member.id} | 身份: ${member.identity}`);
       console.log(`    技能: ${skills}`);
       console.log('');
     }
@@ -407,7 +407,7 @@ export class WorkSpace {
       defaultMember: this.defaultMember ? {
         id: this.defaultMember.id,
         name: this.defaultMember.name,
-        role: this.defaultMember.role,
+        identity: this.defaultMember.identity,
       } : null,
     };
   }

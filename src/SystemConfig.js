@@ -18,7 +18,6 @@ const DEFAULT_PROJECT_ROOT = resolve(__dirname, '..');
  * 1. 加载系统配置（config/system.json）
  * 2. 加载 workspace 配置（config/workspaces/*.json）
  * 3. 解析 member 定义（身份、性格、技能）
- * 4. 管理路径解析（支持相对路径和绝对路径）
  */
 export class SystemConfig {
   /**
@@ -37,9 +36,8 @@ export class SystemConfig {
     // 加载配置
     this.config = this.loadSystemConfig();
 
-    // 解析后的 workspaces 和 members
+    // 解析后的 workspaces
     this.workspaces = {};
-    this.members = {};
 
     // 初始化
     this._initialize();
@@ -70,8 +68,7 @@ export class SystemConfig {
     return {
       version: '1.0.0',
       paths: {
-        workspaces: 'workspaces/',
-        members: 'members/',
+        workspaces: 'config/workspaces/',
         data: 'data/',
         logs: 'logs/'
       },
@@ -82,16 +79,7 @@ export class SystemConfig {
           description: '系统启动时自动创建'
         }
       },
-      members: {
-        default: {
-          id: 'default',
-          name: '管理者',
-          role: '工作空间管理者',
-          skills: []
-        }
-      },
       system: {
-        defaultMemberId: 'default',
         defaultWorkspaceId: 'default',
         maxRounds: 10,
         verbose: false
@@ -104,25 +92,8 @@ export class SystemConfig {
    * @private
    */
   _initialize() {
-    // 加载全局 members 定义
-    this._loadGlobalMembers();
-
     // 加载所有 workspace 配置
     this._loadWorkspaces();
-  }
-
-  /**
-   * 加载全局成员定义
-   * @private
-   */
-  _loadGlobalMembers() {
-    const globalMembers = this.config.members || {};
-    
-    for (const [id, memberConfig] of Object.entries(globalMembers)) {
-      // 解析路径（相对于项目根目录）
-      const resolvedConfig = this._resolveMemberPaths(id, memberConfig);
-      this.members[id] = resolvedConfig;
-    }
   }
 
   /**
@@ -131,7 +102,6 @@ export class SystemConfig {
    */
   _loadWorkspaces() {
     const workspacesConfig = this.config.workspaces || {};
-    const workspaceConfigsDir = join(this.projectRoot, 'config', 'workspaces');
 
     for (const [id, workspaceMeta] of Object.entries(workspacesConfig)) {
       const workspace = {
@@ -150,9 +120,7 @@ export class SystemConfig {
             const workspaceConfig = JSON.parse(readFileSync(fullPath, 'utf-8'));
             // 合并 workspace 配置中的 members
             if (workspaceConfig.members) {
-              for (const [memberId, memberConfig] of Object.entries(workspaceConfig.members)) {
-                workspace.members[memberId] = this._resolveMemberPaths(memberId, memberConfig);
-              }
+              workspace.members = workspaceConfig.members;
             }
             console.log(`✓ Workspace 配置加载: ${workspace.name}`);
           } catch (error) {
@@ -166,37 +134,6 @@ export class SystemConfig {
   }
 
   /**
-   * 解析 member 的路径
-   * @private
-   */
-  _resolveMemberPaths(memberId, memberConfig) {
-    const paths = this.config.paths || {};
-    const membersBasePath = paths.members || 'members/';
-
-    // identity.md 路径
-    let identityPath = memberConfig.identityPath;
-    if (!identityPath) {
-      identityPath = join(membersBasePath, memberId, 'identity.md');
-    } else if (!isAbsolute(identityPath)) {
-      identityPath = join(this.projectRoot, identityPath);
-    }
-
-    // soul.md 路径
-    let soulPath = memberConfig.soulPath;
-    if (!soulPath) {
-      soulPath = join(membersBasePath, memberId, 'soul.md');
-    } else if (!isAbsolute(soulPath)) {
-      soulPath = join(this.projectRoot, soulPath);
-    }
-
-    return {
-      ...memberConfig,
-      identityPath: this._normalizePath(identityPath),
-      soulPath: this._normalizePath(soulPath),
-    };
-  }
-
-  /**
    * 解析路径
    * @private
    */
@@ -205,14 +142,6 @@ export class SystemConfig {
       return relativePath;
     }
     return join(this.projectRoot, relativePath);
-  }
-
-  /**
-   * 规范化路径（转为正斜杠）
-   * @private
-   */
-  _normalizePath(path) {
-    return path.replace(/\\/g, '/');
   }
 
   /**
@@ -245,12 +174,6 @@ export class SystemConfig {
   getWorkspaceMembers(workspaceId) {
     const workspace = this.workspaces[workspaceId];
     if (!workspace) return [];
-
-    // 如果 workspace 没有独立的 members，使用全局 members
-    if (Object.keys(workspace.members).length === 0) {
-      return Object.values(this.members);
-    }
-
     return Object.values(workspace.members);
   }
 
@@ -261,43 +184,6 @@ export class SystemConfig {
   getDefaultWorkspace() {
     const defaultId = this.config.system?.defaultWorkspaceId || 'default';
     return this.getWorkspace(defaultId);
-  }
-
-  /**
-   * 获取默认 member
-   * @param {string} [workspaceId] - workspace ID（可选）
-   * @returns {object|null} 默认 member 配置
-   */
-  getDefaultMember(workspaceId) {
-    const defaultId = this.config.system?.defaultMemberId || 'default';
-
-    if (workspaceId) {
-      const workspace = this.workspaces[workspaceId];
-      if (workspace?.members?.[defaultId]) {
-        return workspace.members[defaultId];
-      }
-    }
-
-    return this.members[defaultId] || null;
-  }
-
-  /**
-   * 获取 member 配置
-   * @param {string} memberId - member ID
-   * @param {string} [workspaceId] - workspace ID（可选）
-   * @returns {object|null} member 配置
-   */
-  getMember(memberId, workspaceId) {
-    // 先在 workspace 中查找
-    if (workspaceId) {
-      const workspace = this.workspaces[workspaceId];
-      if (workspace?.members?.[memberId]) {
-        return workspace.members[memberId];
-      }
-    }
-
-    // 再在全局 members 中查找
-    return this.members[memberId] || null;
   }
 
   /**
@@ -322,7 +208,6 @@ export class SystemConfig {
       projectRoot: this.projectRoot,
       systemConfigPath: this.systemConfigPath,
       workspaces: this.listWorkspaces(),
-      memberCount: Object.keys(this.members).length,
       system: this.getSystemConfig()
     };
   }
