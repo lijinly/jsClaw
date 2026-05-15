@@ -23,43 +23,35 @@
 - 指定 memberId → 交给指定 Member 执行
 - 无指定 → 交给 defaultMember 执行
 
-### Member 人格系统（2026-05-15 新增）
-Member 支持从 `identity.md` 和 `soul.md` 加载身份和性格：
+### 配置系统结构（2026-05-15 最终版）
 
-**文件位置**：
+所有配置统一在 `config/` 目录，Member 定义内嵌于 workspace JSON：
+
 ```
-members/<memberId>/
-├── identity.md   # 身份定义
-└── soul.md       # 性格特征
+config/
+├── system.json           ← 系统配置（路径 + workspace 索引）
+└── workspaces/
+    └── default.json      ← workspace 定义（含 member 集合）
 ```
 
-**已有人格文件**：
-- `members/default/` - 管理者
-- `members/researcher/` - 研究员
-- `members/coder/` - 开发者
-- `members/writer/` - 作者
+**Member 定义结构（内嵌在 workspace JSON 中）**：
+```json
+{
+  "id": "coder",
+  "name": "开发者",
+  "identity": "专业开发者...",   // 身份信息
+  "soul": "逻辑严谨...",        // 性格特征
+  "skills": ["read", "write"]   // 可用工具
+}
+```
 
-**核心方法**：
-- `buildSystemPrompt()` - 构建完整的 system prompt（身份+性格+角色+技能）
-- `getPersonaPrompt()` - 获取带人格的 prompt
-
-### SystemConfig 系统配置（2026-05-15 新增）
-
-统一管理系统配置，支持多 workspace 和 member 定义：
-
-**核心文件**：
-- `config/system.json` - 主配置文件
-- `config/workspaces/*.json` - workspace 独立配置
-- `src/SystemConfig.js` - 配置加载器
-
-**主配置结构**：
+**config/system.json**：
 ```json
 {
   "version": "1.0.0",
-  "paths": { "workspaces": "workspaces/", "members": "members/", "data": "data/", "logs": "logs/" },
-  "workspaces": { "default": { "id": "default", "name": "默认工作空间", "configPath": "..." }},
-  "members": { "default": { "id": "default", "name": "管理者", "role": "...", "identityPath": "...", "soulPath": "..." }},
-  "system": { "defaultMemberId": "default", "defaultWorkspaceId": "default", "maxRounds": 10, "contextManager": {...}, "goalTracker": {...} }
+  "paths": { "workspaces": "config/workspaces/", "data": "data/", "logs": "logs/" },
+  "workspaces": { "default": { "id": "default", "configPath": "config/workspaces/default.json" }},
+  "system": { "defaultWorkspaceId": "default", "maxRounds": 10 }
 }
 ```
 
@@ -67,8 +59,6 @@ members/<memberId>/
 - `getSystemConfig()` - 获取配置单例
 - `config.getWorkspace(id)` - 获取 workspace 配置
 - `config.getWorkspaceMembers(id)` - 获取 workspace 的 members
-- `config.getMember(id, workspaceId)` - 获取 member 配置
-- `config.getDefaultWorkspace()` / `getDefaultMember()` - 获取默认值
 
 **使用文档（集中在 docs/）：**
 - `docs/WORKSPACE.md` - WorkSpace + Member 架构详解
