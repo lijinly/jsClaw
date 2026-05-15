@@ -429,3 +429,77 @@ await agent.run('生成报告');  // 自动注入目标上下文
 - ✅ 上下文生成正常
 - ✅ 事件监听正常
 - ✅ Agent集成正常
+
+## WorkspaceMemory —— 工作空间记忆系统
+
+**实现时间**：2026-05-15
+
+**核心功能**：
+- 跨会话持久化记忆
+- 自动加载/保存记忆到 `.memory` 目录
+- 记忆提炼和更新机制
+- 智能注入到 Agent 的 system prompt
+
+**目录结构**：
+```
+data/workspaces/<workspaceId>/.memory/
+├── MEMORY.md          ← 主记忆文件
+├── YYYY-MM-DD.md      ← 每日记忆
+└── <category>/        ← 按分类组织（可选）
+```
+
+**相关文件**：
+- `src/WorkspaceMemory.js` — WorkspaceMemory 核心实现
+- `src/WorkSpace.js` — WorkSpace 集成记忆系统
+- `src/Member.js` — Member 使用记忆构建 prompt
+- `src/SystemConfig.js` — 提供 getWorkspaceMemoryPath() 方法
+
+**核心 API**：
+```javascript
+// WorkspaceMemory 类
+const memory = new WorkspaceMemory(memoryDir);
+memory.load();                              // 从 .memory 目录加载所有记忆
+memory.save(content, filename);              // 保存记忆到文件
+memory.distill(content, options);           // 提炼内容为结构化记忆
+memory.update(filename, newContent);          // 更新现有记忆
+memory.getForSystemPrompt();                 // 生成供 system prompt 使用的内容
+memory.search(keyword);                      // 搜索记忆
+memory.getCount();                           // 获取记忆数量
+
+// WorkSpace 集成
+const workspace = new WorkSpace({ id: 'default' });
+await workspace.initialize();
+workspace.getMemory();                       // 获取 WorkspaceMemory 实例
+workspace.getMemoryForPrompt();               // 获取用于 system prompt 的记忆
+workspace.saveMemory(content, options);      // 保存记忆
+```
+
+**Member 集成**：
+```javascript
+// buildSystemPrompt() 自动接收 workspaceMemory 参数
+const prompt = member.buildSystemPrompt(workspaceMemory);
+// 输出格式：
+// # 身份定义
+// <identity>
+//
+// # 性格特征
+// <soul>
+//
+// # 角色定位
+// 你是 <name>。
+//
+// # 可用技能
+// <skills>
+//
+// # 工作空间记忆       ← 仅当有记忆时添加
+// <memory content>
+```
+
+**自动创建目录**：
+- SystemConfig 在初始化时自动创建 `data/workspaces/<id>/` 和 `.memory/` 目录
+- 无需手动创建
+
+**Git 提交记录**：
+- commit `8e2ac2f`：集成工作空间记忆系统到 Member prompt
+- commit `c8fb632`：修复配置字段不一致
+- commit `1864f07`：workspace 定义增加 path 字段，自动创建 .memory 目录

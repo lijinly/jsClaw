@@ -3,7 +3,7 @@
 // ─────────────────────────────────────────────
 import { Member } from './Member.js';
 import { SystemConfig, getSystemConfig } from './SystemConfig.js';
-import { WorkspaceMemory } from './WorkspaceMemory.js';
+import { WorkspaceMemory } from './memory.js';
 import { readFileSync, existsSync } from 'fs';
 import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
