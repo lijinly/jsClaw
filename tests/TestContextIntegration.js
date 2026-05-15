@@ -2,7 +2,7 @@
 //  ContextManager + Agent 集成测试
 // ─────────────────────────────────────────────
 import { Agent } from '../src/Agent.js';
-import { ContextManager } from '../src/ContextManager.js';
+import { ContextManager } from '../src/Context.js';
 
 // 创建大量模拟消息
 function createLargeHistory(count = 20) {

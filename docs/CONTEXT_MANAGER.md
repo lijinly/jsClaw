@@ -1,187 +1,267 @@
 # ContextManager —— 上下文自动清理机制
 
-## 概述
+> 自动管理对话历史，控制 token 消耗，避免超出 LLM 上下文限制
 
-ContextManager 是 jsClaw 的核心组件，负责自动管理对话历史，控制 token 消耗，避免超出 LLM 上下文限制。
+## 问题背景
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Token 消耗增长示意                             │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│   Token 数量                                                     │
+│       │                                                         │
+│       │                    ╭───────────╮                        │
+│       │                ╭──╯           ╰──╮                      │
+│       │            ╭──╯                   ╰──╮                  │
+│       │        ╭──╯                         ╰──╮                │
+│       │    ╭──╯                               ╰──╮            │
+│       │╭──╯                                       ╰──╮         │
+│       ╰─────────────────────────────────────────────────→       │
+│       0    5    10   15   20   25   30   35   40   轮次        │
+│                                                                 │
+│       ═══════════════                                        │
+│       ContextManager 干预点                                    │
+│                        ════════════════════════                 │
+│                        裁剪旧消息，保留关键信息                  │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
 
 ## 核心策略
 
-```
-┌─────────────────────────────────────────────────────┐
-│                    输入消息历史                       │
-└─────────────────────────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────┐
-│  1. 保留系统提示（不裁剪）                            │
-│  2. 保留最近N轮完整对话（preserveRecent）             │
-│  3. 旧消息 → LLM摘要 或 简单裁剪                     │
-│  4. 超过阈值自动触发（maxTokens）                    │
-└─────────────────────────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────┐
-│                    输出精简上下文                      │
-└─────────────────────────────────────────────────────┘
-```
+| 策略 | 说明 |
+|------|------|
+| **保留系统提示** | 系统提示不参与裁剪 |
+| **保留最近对话** | 最近 N 轮完整保留 |
+| **旧消息压缩** | 超出阈值的消息压缩为摘要 |
+| **自动触发** | Token 超过阈值时自动裁剪 |
 
-## 快速开始
+## ContextManager 类
 
-### 方式1：独立使用 ContextManager
+### 构造函数
 
 ```javascript
-import { ContextManager } from './src/ContextManager.js';
+import { ContextManager } from './Context.js';
 
 const cm = new ContextManager({
-  maxTokens: 6000,       // 最大 token 数
-  preserveRecent: 4,      // 保留最近N轮完整对话
+  maxTokens: 6000,           // 最大保留 token 数（估算）
+  preserveRecent: 4,          // 保留最近 N 轮完整对话
+  summaryModel: 'qwen-plus', // LLM 摘要模型
+  tokenPerMessage: 4,         // 每条消息的基础 token 开销
+  tokenPerChar: 0.25,        // 字符到 token 的估算比率
+  autoPrune: true,            // 是否自动裁剪
 });
+```
 
-// 估算 token
+### 核心方法
+
+#### `estimateTokens(messages)`
+
+估算消息数组的 token 数
+
+```javascript
+const messages = [
+  { role: 'user', content: '你好' },
+  { role: 'assistant', content: '你好，有什么可以帮你的？' },
+  // ...
+];
+
 const tokens = cm.estimateTokens(messages);
-
-// 自动裁剪（同步，简单裁剪）
-const pruned = cm.prune(messages);
-
-// 异步裁剪（LLM摘要，更智能）
-const prunedWithSummary = await cm.pruneAsync(messages);
-
-// 查看统计
-console.log(cm.getStats());
-// { totalPrunes: 1, totalSummaries: 0, savedTokens: 2699 }
+console.log(`估算: ${tokens} tokens`);
 ```
 
-### 方式2：集成到 Agent（推荐）
+#### `needsPrune(messages)`
+
+判断是否需要裁剪
 
 ```javascript
-import { Agent } from './src/agent.js';
-
-const agent = new Agent({
-  name: '我的助手',
-  role: '智能助手',
-  verbose: true,
-  contextManager: {
-    maxTokens: 6000,
-    preserveRecent: 4,
-  },
-});
-
-// Agent.run() 自动管理上下文
-const result = await agent.run('用户消息', {
-  history: longHistory,  // 很长的话题历史
-});
-
-// 查看上下文管理统计
-console.log(result.contextStats);
-```
-
-## 配置参数
-
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| `maxTokens` | 6000 | 最大保留 token 数（估算值） |
-| `preserveRecent` | 4 | 保留最近N轮完整对话 |
-| `tokenPerMessage` | 4 | 每条消息的基础 token 开销 |
-| `tokenPerChar` | 0.25 | 字符到 token 的估算比率 |
-| `autoPrune` | true | 是否自动裁剪 |
-| `summaryModel` | qwen-plus | LLM摘要使用的模型 |
-
-## 裁剪策略
-
-### 同步裁剪（prune）
-- 保留系统消息
-- 保留最近 `preserveRecent * 2` 条对话（user + assistant）
-- 丢弃旧消息（不生成摘要）
-- 适用于：不需要 LLM 摘要的场景，快速裁剪
-
-### 异步裁剪（pruneAsync）
-- 保留系统消息
-- 保留最近 `preserveRecent * 2` 条对话
-- 旧消息 → LLM 生成摘要
-- 摘要格式：`[历史摘要 - 日期] <摘要内容>`
-- 适用于：需要保留历史关键信息的场景
-
-## 使用场景
-
-### 场景1：长对话分析任务
-
-```javascript
-// 量化分析场景，对话历史很长
-const result = await agent.run('生成今日市场报告', {
-  history: veryLongHistory,  // 可能包含几百条消息
-});
-// Agent 自动裁剪历史，只保留最近对话 + 系统提示
-```
-
-### 场景2：手动控制
-
-```javascript
-// 检查是否需要裁剪
-if (cm.needsPrune(history)) {
-  const pruned = cm.prune(history);
-  // 继续使用 pruned 消息
+if (cm.needsPrune(messages)) {
+  console.log('需要裁剪');
 }
-
-// 查看 token 消耗
-const tokens = cm.estimateTokens(history);
-console.log(`当前消耗: ${tokens} tokens`);
 ```
 
-### 场景3：自定义阈值
+#### `prune(messages)` —— 同步版本
+
+自动裁剪消息数组（同步版本，优先使用简单裁剪）
 
 ```javascript
-// 针对不同模型调整阈值
-const cmGpt4 = new ContextManager({ maxTokens: 3000 });  // GPT-4 较贵
-const cmQwen = new ContextManager({ maxTokens: 8000 });  // 千问支持更多
+const pruned = cm.prune(messages);
+// 返回裁剪后的消息数组
 ```
 
-## 统计信息
+#### `pruneAsync(messages)` —— 异步版本
+
+使用 LLM 生成摘要并重组消息
 
 ```javascript
+const pruned = await cm.pruneAsync(messages);
+// 异步调用 LLM 生成摘要
+```
+
+### 统计方法
+
+```javascript
+// 获取统计信息
 const stats = cm.getStats();
+console.log(stats);
 // {
-//   totalPrunes: 5,      // 裁剪次数
-//   totalSummaries: 2,   // LLM摘要次数
-//   savedTokens: 12500,  // 共节省的 token
-//   config: { ... }
+//   totalPrunes: 5,        // 总裁剪次数
+//   totalSummaries: 2,     // LLM 摘要次数
+//   savedTokens: 3500,     // 节省的 tokens
+//   config: {
+//     maxTokens: 6000,
+//     preserveRecent: 4,
+//   }
 // }
 
 // 重置统计
 cm.resetStats();
+
+// 打印状态
+cm.logStatus(messages);
 ```
 
-## 集成到 Team 系统
+## 裁剪流程
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     裁剪决策流程                                 │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│   输入 messages[]                                               │
+│       │                                                         │
+│       ▼                                                         │
+│  ┌─────────────────┐                                            │
+│  │ autoPrune 开启？ │ ──否──→ 直接返回原消息                     │
+│  └────────┬────────┘                                            │
+│           │是                                                    │
+│           ▼                                                     │
+│  ┌─────────────────┐                                            │
+│  │ messages < 6 条？│ ──是──→ 直接返回原消息                     │
+│  └────────┬────────┘                                            │
+│           │否                                                    │
+│           ▼                                                     │
+│  ┌─────────────────┐                                            │
+│  │ needsPrune？    │ ──否──→ 直接返回原消息                     │
+│  └────────┬────────┘                                            │
+│           │是                                                    │
+│           ▼                                                     │
+│  ┌─────────────────┐                                            │
+│  │ 分离消息类型     │                                            │
+│  │ system / other  │                                            │
+│  └────────┬────────┘                                            │
+│           ▼                                                     │
+│  ┌─────────────────┐                                            │
+│  │ 保留最近 N 轮    │                                            │
+│  │ + 简单裁剪/摘要  │                                            │
+│  └────────┬────────┘                                            │
+│           ▼                                                     │
+│      输出裁剪后消息                                              │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## 裁剪策略详解
+
+### 简单裁剪
+
+适用于消息结构简单、无需 LLM 摘要的场景：
 
 ```javascript
-// 在 Team 成员间共享 ContextManager
-const teamContext = new ContextManager({ maxTokens: 10000 });
+// 输入: [sys1, user1, asst1, user2, asst2, user3, asst3, user4, asst4, ...]
+// 保留: [sys1, user3, asst3, user4, asst4]  // 最近 2 轮
 
-// 每个成员处理完后，统一管理上下文
-for (const member of team.members) {
-  const result = await member.execute(task);
-  teamContext.prune(member.history);
-}
+// 被裁剪的消息: user1, asst1, user2, asst2
 ```
+
+### LLM 摘要
+
+适用于消息内容丰富、需要保留上下文的场景：
+
+```javascript
+// 摘要提示词
+`你是一个对话摘要专家。请将以下对话历史压缩成一个简洁的摘要。
+
+要求：
+1. 保留关键信息（用户意图、已完成的任务、重要决策）
+2. 移除重复内容和中间过程
+3. 格式：保持为一段连贯的摘要文字
+4. 长度：尽量控制在200字以内
+
+对话历史：
+${oldMessages}
+
+摘要格式：
+[摘要] <你的摘要内容> [/摘要]`
+
+// 输出: [sys1, [历史摘要], user3, asst3, user4, asst4]
+```
+
+## Token 估算
+
+### 估算公式
+
+```
+totalTokens = Σ(baseCost + contentCost + toolCost)
+
+其中：
+- baseCost = tokenPerMessage (默认 4) × 消息数
+- contentCost = content.length × tokenPerChar (默认 0.25)
+- toolCost = tool_calls.length × 50 (每个 tool_call 约 50 tokens)
+- tool 角色额外开销 = 20
+```
+
+### 验证示例
+
+```javascript
+// 1000 字的内容 ≈ 250 tokens
+// 50 条消息 ≈ 200 tokens (基础开销)
+// 5 个 tool_calls ≈ 250 tokens
+
+// 总计 ≈ 700 tokens
+```
+
+## 与 Agent 集成
+
+```javascript
+import { Agent } from './Agent.js';
+
+const agent = new Agent({
+  contextManager: {
+    maxTokens: 6000,      // 最大 token 数
+    preserveRecent: 4,    // 保留最近 4 轮
+    autoPrune: true,      // 自动裁剪
+  },
+});
+
+// Agent.run() 自动使用 ContextManager
+const result = await agent.run('长对话任务', {
+  history: longHistory,   // 传入长历史
+  autoPrune: true,        // 启用自动裁剪
+});
+```
+
+## 配置建议
+
+| 场景 | maxTokens | preserveRecent | 策略 |
+|------|-----------|----------------|------|
+| 短对话 | 3000 | 2 | 简单裁剪 |
+| 标准对话 | 6000 | 4 | 简单裁剪 |
+| 长对话 | 10000 | 6 | LLM 摘要 |
+| 超长对话 | 20000 | 8 | LLM 摘要 |
 
 ## 注意事项
 
-1. **Token 估算是近似值**：实际 token 消耗可能略有差异，建议设置 `maxTokens` 时留 10-20% 余量
+1. **Token 估算是近似的**：实际 token 数可能因模型而异
+2. **系统提示不算裁剪**：系统提示太长会影响效果
+3. **摘要有成本**：LLM 摘要需要额外 API 调用
+4. **历史太长会稀释**：建议定期开启新会话
 
-2. **系统提示过长警告**：当系统提示超过 `maxTokens * 0.3` 时会发出警告，建议优化系统提示
+## 测试
 
-3. **LLM 摘要依赖**：调用 `pruneAsync` 需要有效的 LLM 配置
-
-4. **消息结构要求**：消息必须符合 `{ role, content }` 结构
-
-## 扩展：自定义摘要策略
-
-```javascript
-// 继承 ContextManager 实现自定义摘要
-class CustomContextManager extends ContextManager {
-  async _customSummarize(oldMessages) {
-    // 自定义摘要逻辑
-    const summary = await myLLMSummarize(oldMessages);
-    return summary;
-  }
-}
+```bash
+node tests/TestContextManager.js
+node tests/TestContextIntegration.js
+node tests/TestContextLarge.js
 ```

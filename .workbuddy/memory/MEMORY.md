@@ -10,6 +10,28 @@
 - LLM：阿里云千问 qwen-plus（OpenAI 兼容接口）
 - API Key 配置：`.env` 文件 `OPENAI_API_KEY=sk-45d478ddd7b94b0d838d9fce6f1e3762`
 
+## 开发规范
+
+### 修改流程（必须遵循）
+
+每次功能讨论/需求开发，必须严格按以下顺序执行：
+
+```
+1. 确认方案 → 2. 修改文档 → 3. 修改代码 → 4. 确认一致性
+```
+
+| 步骤 | 说明 |
+|------|------|
+| **1. 确认方案** | 讨论技术方案、API 设计、架构变更，形成共识后再动手 |
+| **2. 修改文档** | 先修改 `docs/` 下的相关文档（README.md, API文档等） |
+| **3. 修改代码** | 根据文档完成代码实现 |
+| **4. 确认一致性** | 验证代码与文档描述一致，更新 memory 记录变更 |
+
+**注意**：
+- 文档是代码的契约，代码变更必须先反映在文档中
+- 代码修改完成后必须对照文档检查一致性
+- 更新 memory 记录本次变更内容
+
 ## 架构
 
 ### WorkSpace + Member 架构（最新）
@@ -503,3 +525,93 @@ const prompt = member.buildSystemPrompt(workspaceMemory);
 - commit `8e2ac2f`：集成工作空间记忆系统到 Member prompt
 - commit `c8fb632`：修复配置字段不一致
 - commit `1864f07`：workspace 定义增加 path 字段，自动创建 .memory 目录
+
+## Goal DAG 系统（2026-05-15）
+
+**核心功能**：实现 DAG 驱动的目标管理系统
+
+**组件架构**：
+```
+Manager（管理者）— 协调 Goal 执行和 Member 分派
+├── Goal — 目标
+│   └── SubGoals[] — 子目标（DAG 节点）
+│       ├── dependsOn — DAG 依赖
+│       ├── sequential — 执行顺序
+│       └── Tasks[] — 叶子节点
+└── Member — 执行者
+```
+
+**相关文件**：
+- `src/Goal.js` — Goal 类（DAG 管理、状态机）
+- `src/SubGoal.js` — SubGoal 类（节点管理、依赖检查）
+- `src/Task.js` — Task 类（最小执行单元）
+- `src/Manager.js` — Manager 类（协调器）
+- `tests/TestGoalDag.js` — 测试用例
+- `docs/GOAL_DAG_SYSTEM.md` — 使用文档
+
+**状态机**：
+- Task: `PENDING → RUNNING → SUCCESS/FAILED/RETRY`
+- SubGoal: `PENDING → READY → IN_PROGRESS → COMPLETED/FAILED`
+- Goal: `PENDING → IN_PROGRESS → COMPLETED/FAILED/CANCELLED`
+
+**DAG 规格格式**：
+```javascript
+[
+  { id: 'sg1', dependsOn: [], tasks: [{ id: 't1', tool: 'web_search', args: {} }] },
+  { id: 'sg2', dependsOn: ['sg1'], tasks: [{ id: 't2', tool: 'exec', args: {} }] }
+]
+```
+
+**测试结果**：✅ 10/10 通过
+- ✅ 简单 Goal（无依赖）
+- ✅ 顺序执行 Goal
+- ✅ DAG 依赖 Goal
+- ✅ 失败 Task 与重试
+- ✅ 进度跟踪
+- ✅ 持久化（导出/导入）
+- ✅ 验收标准（规则式）
+- ✅ 验收标准（函数式）
+- ✅ 人工验收（描述式）
+- ✅ 嵌套字段验收
+
+**Task 验收标准**：
+- `subGoalId`：Task 所属的 SubGoal ID
+- `acceptanceCriteria`：验收标准，支持三种类型：
+  1. **函数式**：`{ type: 'function', fn: (result) => boolean }`
+  2. **规则式**：`{ type: 'rules', checks: [{ field, operator, value }] }`
+  3. **描述式**：`{ type: 'description', description: '...' }`（人工验收）
+- 支持嵌套字段：`response.data.items.length`
+- 支持 15+ 操作符：equals, greaterThan, contains, isNull, matches 等
+
+**Bug 修复**：
+- SubGoal.updateStatus()：修复状态转换逻辑，支持 IN_PROGRESS 状态
+- Goal._updateGoalStatus()：修复 pending 计算，支持进行中状态
+
+## jsClaw 框架文档（2026-05-15/16）
+
+### 完成工作
+为 jsClaw 框架编写了完整的结构化文档，包含 12 个文档文件（docs/）：
+
+| 文档 | 说明 |
+|------|------|
+| `README.md` | 框架概览、架构图、快速开始、文档索引 |
+| `AGENT.md` | Think-Act 模式、核心方法、目标管理、状态机、继承扩展 |
+| `CONTEXT_MANAGER.md` | 上下文自动清理、Token 估算、裁剪策略、配置参数 |
+| `GOAL_DAG_SYSTEM.md` | Goal/SubGoal/Task DAG 系统、验收标准、状态机 |
+| `WORKSPACE.md` | WorkSpace、Member、SystemConfig、Zone 集成、任务路由 |
+| `SKILL_REGISTRY.md` | Skill 注册、内置 Skill、懒加载机制、扩展开发 |
+| `LLM.md` | LLM 客户端配置、多 Provider 预设、环境变量 |
+| `MEMORY.md` | WorkspaceMemory、记忆持久化、文件格式、自动注入 |
+| `ZONE.md` | Zone 生命周期管理、多 Zone 管理、API |
+| `MARKETPLACE.md` | ClaWHub Skill 市场、API、限流说明、安装管理 |
+| `CONFIG.md` | 系统配置、环境变量、Workspace 配置、SystemConfig API |
+| `GOAL_TRACKER.md` | 目标追踪器、检查点、成就/阻碍记录 |
+
+### CONFIG.md 核心内容
+- 环境变量配置（LLM_PROVIDER, MODEL_NAME, OPENAI_API_KEY）
+- Provider 预设（千问、OpenAI、DeepSeek、Ollama）
+- 系统配置文件（config/system.json）结构
+- Workspace 配置（config/workspaces/*.json）Member 定义
+- SystemConfig API 完整文档（getInfo, listWorkspaces, getWorkspace 等）
+- 最佳实践（环境隔离、目录结构、敏感信息管理）
+- 配置优先级和验证清单

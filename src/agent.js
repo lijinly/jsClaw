@@ -3,8 +3,8 @@
 // ─────────────────────────────────────────────
 import { chat } from './Llm.js';
 import { getToolDefinitions, executeToolCalls } from './SkillRegistry.js';
-import { ContextManager } from './ContextManager.js';
-import { GoalTracker } from './GoalTracker.js';
+import { ContextManager } from './Context.js';
+import { GoalTracker } from './Goal.js';
 
 /**
  * Agent 类 —— Think-Act 模式的核心实现

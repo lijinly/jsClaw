@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────
 //  ContextManager 测试
 // ─────────────────────────────────────────────
-import { ContextManager, createContextManager } from '../src/ContextManager.js';
+import { ContextManager, createContextManager } from '../src/Context.js';
 
 // 测试1：基础token估算
 console.log('\n========== 测试1：Token估算 ==========');

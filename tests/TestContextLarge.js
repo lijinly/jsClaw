@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────
 //  ContextManager 大规模裁剪测试（模拟真实场景）
 // ─────────────────────────────────────────────
-import { ContextManager } from '../src/ContextManager.js';
+import { ContextManager } from '../src/Context.js';
 
 // 创建真实规模的消息（模拟实际使用场景）
 function createRealisticHistory(rounds = 30) {

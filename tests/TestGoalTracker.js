@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────
 //  GoalTracker 测试
 // ─────────────────────────────────────────────
-import { GoalTracker, GoalPriority, GoalStatus } from '../src/GoalTracker.js';
+import { GoalTracker, GoalPriority, GoalStatus } from '../src/Goal.js';
 
 // 测试1：创建目标
 console.log('\n========== 测试1：创建目标 ==========');
