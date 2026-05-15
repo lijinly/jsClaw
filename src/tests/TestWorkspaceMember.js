@@ -5,7 +5,7 @@ import 'dotenv/config';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { WorkSpace } from '../WorkSpace.js';
-import { initLLM } from '../llm.js';
+import { initLLM } from '../Llm.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

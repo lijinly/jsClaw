@@ -3,8 +3,8 @@
 // ─────────────────────────────────────────────
 import 'dotenv/config';
 import readline from 'readline';
-import { initLLM } from './llm.js';
-import { initDefaultWorkspace, executeInDefaultWorkspace, getDefaultWorkspace } from './globalWorkspace.js';
+import { initLLM } from './Llm.js';
+import { initDefaultWorkspace, executeInDefaultWorkspace, getDefaultWorkspace } from './GlobalWorkspace.js';
 import './skills/builtins.js';  // 加载内置技能（含 list_skills、read_skill）
 
 // 导出给外部使用

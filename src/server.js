@@ -6,8 +6,8 @@ import http from 'http';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { initLLM } from './llm.js';
-import { Agent } from './agent.js';
+import { initLLM } from './Llm.js';
+import { Agent } from './Agent.js';
 import { WorkSpace } from './WorkSpace.js';
 import './skills/builtins.js';
 

@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────
 //  ContextManager + Agent 集成测试
 // ─────────────────────────────────────────────
-import { Agent } from '../agent.js';
+import { Agent } from '../Agent.js';
 import { ContextManager } from '../ContextManager.js';
 
 // 创建大量模拟消息

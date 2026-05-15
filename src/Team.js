@@ -2,7 +2,7 @@
 //  Team —— 持久化协作团队
 // ─────────────────────────────────────────────
 import { Member } from './Member.js';
-import { chat } from './llm.js';
+import { chat } from './Llm.js';
 
 /**
  * Team 类 - 协作团队

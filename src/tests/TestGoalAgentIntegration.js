@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────
 //  GoalTracker + Agent 集成测试
 // ─────────────────────────────────────────────
-import { Agent } from '../agent.js';
+import { Agent } from '../Agent.js';
 
 // 测试1：Agent 创建目标
 console.log('\n========== 测试1：Agent + GoalTracker ==========');

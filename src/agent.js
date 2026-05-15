@@ -1,8 +1,8 @@
 // ─────────────────────────────────────────────
 //  Agent —— Think-Act 模式（无 guidance 版本）
 // ─────────────────────────────────────────────
-import { chat } from './llm.js';
-import { getToolDefinitions, executeToolCalls } from './skillRegistry.js';
+import { chat } from './Llm.js';
+import { getToolDefinitions, executeToolCalls } from './SkillRegistry.js';
 import { ContextManager } from './ContextManager.js';
 import { GoalTracker } from './GoalTracker.js';
 

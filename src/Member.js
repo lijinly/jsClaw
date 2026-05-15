@@ -1,9 +1,9 @@
 // ─────────────────────────────────────────────
 //  Member —— 工作空间中的执行成员（基于 Agent）
 // ─────────────────────────────────────────────
-import { Agent } from './agent.js';
-import { getToolDefinitions, executeToolCalls } from './skillRegistry.js';
-import { chat } from './llm.js';
+import { Agent } from './Agent.js';
+import { getToolDefinitions, executeToolCalls } from './SkillRegistry.js';
+import { chat } from './Llm.js';
 import { dirname } from 'path';
 import { fileURLToPath } from 'url';
 
