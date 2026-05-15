@@ -1,8 +1,8 @@
 // ─────────────────────────────────────────────
 //  WorkSpace + Member 架构演示
 // ─────────────────────────────────────────────
-import { WorkSpace } from './WorkSpace.js';
-import { getSystemConfig } from './SystemConfig.js';
+import { WorkSpace } from '../src/WorkSpace.js';
+import { getSystemConfig } from '../src/SystemConfig.js';
 
 /**
  * 演示 WorkSpace + Member 新架构

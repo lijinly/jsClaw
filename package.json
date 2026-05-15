@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node src/Index.js",
     "web": "node src/Server.js",
-    "demo:workspace": "node src/DemoWorkspace.js",
+    "demo:workspace": "node tests/DemoWorkspace.js",
     "skill:list": "node src/Marketplace.js list",
     "skill:info": "node src/Marketplace.js info",
     "skill:install": "node src/Marketplace.js install",
