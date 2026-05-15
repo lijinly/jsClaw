@@ -24,3 +24,4 @@ temp/
 # 示例配置文件模板（.example.json 不参与 git）
 *.example.json
 .workbuddy
+.lingma
