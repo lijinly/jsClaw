@@ -32,8 +32,16 @@ export async function runTest(testFile, verbose = true) {
   }
 
   try {
-    // 使用动态 import 运行测试（需要 file:// URL）
-    await import(testURL);
+    // 使用动态 import 运行测试
+    // 新测试文件导出 default 函数供调用，老测试文件自动执行
+    const mod = await import(testURL);
+    if (typeof mod.default === 'function') {
+      // 捕获异步测试中的未处理错误
+      await mod.default().catch(err => {
+        console.error(`✗ ${testFile} 执行异常:`, err.message);
+        throw err;
+      });
+    }
     const duration = Date.now() - startTime;
 
     if (verbose) {

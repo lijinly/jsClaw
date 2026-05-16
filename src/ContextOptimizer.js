@@ -30,6 +30,10 @@ export class ContextOptimizer {
     this.tokenPerChar = options.tokenPerChar ?? 0.25;
     this.autoPrune = options.autoPrune ?? true;
 
+    // 新增配置
+    this.priorityKeywords = options.priorityKeywords || [];  // 高优先级关键词
+    this.strategy = options.strategy || 'simple';            // 'simple' | 'aggressive' | 'smart'
+
     // 统计信息
     this.stats = {
       totalPrunes: 0,
@@ -74,7 +78,7 @@ export class ContextOptimizer {
   }
 
   /**
-   * 自动裁剪消息数组（同步版本，优先使用简单裁剪）
+   * 自动裁剪消息数组（同步版本，根据策略选择裁剪方式）
    * 如果需要LLM摘要，请使用 pruneAsync()
    * @param {Array} messages - 原始消息数组
    * @returns {Array} 裁剪后的消息数组
@@ -109,9 +113,57 @@ export class ContextOptimizer {
       return [...systemMessages, ...recentMessages];
     }
 
-    // 同步版本使用简单裁剪（不调用LLM）
-    // 如需LLM摘要，使用 pruneAsync()
-    return this._simplePrune(systemMessages, oldMessages, recentMessages);
+    // 根据策略选择裁剪方式
+    switch (this.strategy) {
+      case 'aggressive':
+        return this._aggressivePrune(systemMessages, oldMessages, recentMessages);
+      case 'smart':
+        return this._smartPrune(systemMessages, oldMessages, recentMessages);
+      default:
+        return this._simplePrune(systemMessages, oldMessages, recentMessages);
+    }
+  }
+
+  /**
+   * 激进策略：保留更少的历史
+   * @private
+   */
+  _aggressivePrune(systemMessages, oldMessages, recentMessages) {
+    console.log(`[ContextOptimizer] ✂️ 激进裁剪 ${oldMessages.length} 条旧消息...`);
+    const removedTokens = this.estimateTokens(oldMessages);
+    this.stats.savedTokens += removedTokens;
+    this.stats.totalPrunes++;
+    // 保留更少：只保留最近的一半
+    const aggressiveRecent = recentMessages.slice(-this.preserveRecent);
+    return [...systemMessages, ...aggressiveRecent];
+  }
+
+  /**
+   * 智能策略：优先保留高优先级消息
+   * @private
+   */
+  _smartPrune(systemMessages, oldMessages, recentMessages) {
+    console.log(`[ContextOptimizer] 🧠 智能裁剪 ${oldMessages.length} 条旧消息...`);
+
+    // 从旧消息中识别高优先级消息
+    const priorityMessages = oldMessages.filter(m => this._containsPriorityKeyword(m.content));
+    const removedTokens = this.estimateTokens(oldMessages) - this.estimateTokens(priorityMessages);
+    this.stats.savedTokens += removedTokens;
+    this.stats.totalPrunes++;
+
+    // 合并：系统消息 + 高优先级 + 最近消息
+    return [...systemMessages, ...priorityMessages, ...recentMessages];
+  }
+
+  /**
+   * 检查消息是否包含高优先级关键词
+   * @private
+   */
+  _containsPriorityKeyword(content) {
+    if (!this.priorityKeywords.length) return false;
+    return this.priorityKeywords.some(kw =>
+      content?.toLowerCase().includes(kw.toLowerCase())
+    );
   }
 
   /**
@@ -237,6 +289,8 @@ ${this._formatMessagesForSummary(oldMessages)}
       config: {
         maxTokens: this.maxTokens,
         preserveRecent: this.preserveRecent,
+        strategy: this.strategy,
+        priorityKeywords: this.priorityKeywords,
       },
     };
   }

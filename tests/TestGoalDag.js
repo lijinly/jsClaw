@@ -2,7 +2,6 @@
 //  TestGoalDag.js —— Goal DAG 系统集成测试
 // ─────────────────────────────────────────────
 import { Goal, GoalStatus } from '../src/Goal.js';
-import { SubGoal, SubGoalStatus } from '../src/SubGoal.js';
 import { Task, TaskStatus } from '../src/Task.js';
 
 /**

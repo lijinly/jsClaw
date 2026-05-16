@@ -6,6 +6,25 @@ import { Task, TaskStatus } from './Task.js';
 import { executeToolCalls } from './SkillRegistry.js';
 import { Member } from './Member.js';
 
+// 错误类型枚举
+const ErrorType = {
+  TRANSIENT: 'transient',    // 瞬时错误（网络超时、临时不可用）→ 可重试
+  PERMANENT: 'permanent',    // 永久错误（权限不足、参数错误）→ 不重试
+  UNKNOWN: 'unknown',        // 未知错误 → 有限重试
+};
+
+// 错误分类函数
+function classifyError(error) {
+  const msg = error.message?.toLowerCase() || '';
+  if (msg.includes('timeout') || msg.includes('econnrefused') || msg.includes('enotfound') || msg.includes('ECONNREFUSED')) {
+    return ErrorType.TRANSIENT;
+  }
+  if (msg.includes('permission') || msg.includes('unauthorized') || msg.includes('invalid') || msg.includes('forbidden')) {
+    return ErrorType.PERMANENT;
+  }
+  return ErrorType.UNKNOWN;
+}
+
 /**
  * Manager 类 —— Goal 执行协调器（管理者）
  *
@@ -92,6 +111,19 @@ export class Manager extends Member {
       enableRetry: managerConfig.enableRetry ?? true,   // 启用自动重试
       ...managerConfig,
     };
+
+    // 错误处理配置
+    this.errorConfig = {
+      maxRetries: managerConfig.maxRetries ?? 3,
+      baseDelayMs: managerConfig.baseDelayMs ?? 1000,
+      maxDelayMs: managerConfig.maxDelayMs ?? 30000,
+      exponentialBackoff: managerConfig.exponentialBackoff ?? true,
+      circuitBreakerThreshold: managerConfig.circuitBreakerThreshold ?? 5,
+    };
+
+    // 熔断状态
+    this._circuitOpen = false;
+    this._consecutiveFailures = 0;
 
     // 活跃的 Goals
     this._activeGoals = new Map();
@@ -314,6 +346,9 @@ export class Manager extends Member {
           result = await this._executeTool(task.tool, task.args);
       }
 
+      // 成功时重置熔断计数
+      this._consecutiveFailures = 0;
+
       // 标记成功
       goal.onTaskComplete(task.id, true, result);
 
@@ -327,23 +362,72 @@ export class Manager extends Member {
     } catch (error) {
       console.error(`[Manager:${this.id}] Task 执行失败: ${task.id} - ${error.message}`);
 
-      // 标记失败
-      goal.onTaskComplete(task.id, false, null, error.message);
+      const errorType = classifyError(error);
 
-      if (this._onTaskComplete) {
-        this._onTaskComplete(task, false, null, error);
+      // 永久错误不重试
+      if (errorType === ErrorType.PERMANENT) {
+        task.fail(error.message);
+        goal.onTaskComplete(task.id, false, null, error.message);
+        this._handleConsecutiveFailure();
+        return;
       }
 
-      // 自动重试
+      // 检查熔断
+      if (this._circuitOpen) {
+        task.fail('服务熔断中，暂停重试');
+        goal.onTaskComplete(task.id, false, null, '服务熔断');
+        return;
+      }
+
+      // 计算退避延迟
+      const delay = this._calculateBackoff(task.attempts);
+
       if (this.config.enableRetry && task.canRetry()) {
-        console.log(`[Manager:${this.id}] 重试 Task: ${task.id} (${task.attempts}/${task.maxAttempts})`);
+        console.log(`[Manager:${this.id}] ${delay}ms 后重试 Task: ${task.id}`);
         setTimeout(() => {
           const retryTask = goal._tasksMap.get(task.id);
           if (retryTask) {
             this._executeTask(goal, retryTask, member);
           }
-        }, 1000);
+        }, delay);
+      } else {
+        task.fail(error.message);
+        goal.onTaskComplete(task.id, false, null, error.message);
+        this._handleConsecutiveFailure();
       }
+    }
+  }
+
+  /**
+   * 计算指数退避延迟
+   * @param {number} attempt - 当前尝试次数
+   * @returns {number} 延迟毫秒
+   * @private
+   */
+  _calculateBackoff(attempt) {
+    const { baseDelayMs, maxDelayMs, exponentialBackoff } = this.errorConfig;
+    if (exponentialBackoff) {
+      return Math.min(baseDelayMs * Math.pow(2, attempt), maxDelayMs);
+    }
+    return baseDelayMs;
+  }
+
+  /**
+   * 处理连续失败，触发熔断
+   * @private
+   */
+  _handleConsecutiveFailure() {
+    this._consecutiveFailures++;
+    if (this._consecutiveFailures >= this.errorConfig.circuitBreakerThreshold) {
+      this._circuitOpen = true;
+      console.warn(`[Manager:${this.id}] 熔断开启，${this.errorConfig.maxDelayMs}ms 后自动恢复`);
+
+      // 定时器后自动恢复
+      setTimeout(() => {
+        this._circuitOpen = false;
+        this._consecutiveFailures = 0;
+        console.log(`[Manager:${this.id}] 熔断恢复`);
+      }, this.errorConfig.maxDelayMs);
     }
   }
 
