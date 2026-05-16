@@ -5,720 +5,112 @@
 - **pyClaw**：`D:/pyClaw`（Python 版 Agent 框架）
 
 ## 技术栈
-- Node.js v24，`"type": "module"`（ES Module）
-- 依赖：`openai`, `dotenv`, `open-websearch`, `playwright`, `puppeteer`
+- Node.js v24，`"type": "module"`
 - LLM：阿里云千问 qwen-plus（OpenAI 兼容接口）
-- API Key 配置：`.env` 文件 `OPENAI_API_KEY=sk-45d478ddd7b94b0d838d9fce6f1e3762`
+- 核心依赖：`openai`, `dotenv`, `playwright`, `puppeteer`
 
-## 开发规范
+## 核心约束
 
-### 修改流程（必须遵循）
-
-每次功能讨论/需求开发，必须严格按以下顺序执行：
-
+### 修改流程
 ```
 1. 确认方案 → 2. 修改文档 → 3. 修改代码 → 4. 确认一致性
 ```
 
-| 步骤 | 说明 |
-|------|------|
-| **1. 确认方案** | 讨论技术方案、API 设计、架构变更，形成共识后再动手 |
-| **2. 修改文档** | 先修改 `docs/` 下的相关文档（README.md, API文档等） |
-| **3. 修改代码** | 根据文档完成代码实现 |
-| **4. 确认一致性** | 验证代码与文档描述一致，更新 memory 记录变更 |
+### 文件组织
+- 测试文件 → `tests/` 文件夹
+- 调试脚本临时放根目录，完成后移入 tests/ 或删除
+- 文档集中在 `docs/` 目录
 
-**注意**：
-- 文档是代码的契约，代码变更必须先反映在文档中
-- 代码修改完成后必须对照文档检查一致性
-- 更新 memory 记录本次变更内容
+---
 
-## 架构
+## 整体设计
 
-### Zone + WorkSpace + Session 三层架构（2026-05-15 最终版）
+### Zone + WorkSpace + Session 三层架构
 
 ```
 Zone (单例)
-├── 持有 Workspace 实例池（懒加载）
-├── 管理 system.json 注册表
-└── Workspace CRUD（创建/加载/关闭/删除）
-    └── Workspace (每个独立实例)
-        ├── path                    ← 物理路径（用户指定）
-        ├── 自建 Manager + Members
-        ├── sessions: Map<id, Session>
+├── Workspace 实例池（懒加载）
+├── system.json 注册表
+└── Workspace CRUD
+    └── Workspace
+        ├── path（物理路径）
+        ├── Members（自建）
+        ├── Session 管理
         └── WorkspaceMemory
-            └── Session (会话)
-                ├── userMessage()   ← 带上下文 + 每次消息后自动 save()
-                └── 文件: .workspace/sessions/ws-{wsId}-s-{sId}.json
-
-**会话生命周期（CLI + Server 通用）**：
-```
-启动  → startService() → Zone.loadWorkspace() → _restoreSessions()  恢复已有会话
-会话  → chat(msg, {sessionId}) → session.userMessage() → this.save() 自动保存
-退出  → gracefulShutdown() → workspace.save() → process.exit()
+            └── Session（会话）
+                ├── userMessage() + 自动 save()
+                └── 文件持久化
 ```
 
+### 会话生命周期
 ```
-<workspace-path>/
-├── .workspace/sessions/   ← Session 持久化
-├── .memory/              ← WorkspaceMemory
-└── <业务文件>
-```
-
-**system.json（v2.0.0 Zone 注册表格式）**：
-```json
-{
-  "version": "2.0.0",
-  "zone": { "id": "default", "name": "默认Zone" },
-  "workspaces": {
-    "default": {
-      "id": "default", "name": "默认工作空间",
-      "path": ".",
-      "configPath": "config/workspaces/default.json",
-      "createdAt": "2026-03-01T00:00:00.000Z"
-    }
-  }
-}
+启动 → Zone.loadWorkspace() → _restoreSessions() 恢复会话
+会话 → chat(msg, {sessionId}) → session.userMessage() → save()
+退出 → gracefulShutdown() → workspace.save() → exit
 ```
 
-**Session 持久化路径**：
-`<workspace-path>/.workspace/sessions/ws-{workspaceId}-s-{sessionId}.json`
-
-**使用文档（集中在 docs/）：**
-- `docs/WORKSPACE.md` - Zone/Workspace/Session 三层架构详解（v2.0.0）
-- `docs/SESSION.md` - Session 会话管理
-- `docs/AGENT.md` - Agent 面向对象设计
-- `docs/CONTEXT_MANAGER.md` - 上下文管理器（ContextOptimizer）
-- `docs/GOAL_TRACKER.md` - 目标追踪器
-- `docs/TEAM.md` - Team 协作系统（Legacy）
-
-**任务路由（WorkSpace）：**
-- 指定 memberIds → 多个 Member 协作执行
-- 指定 memberId → 交给指定 Member 执行
-- 无指定 → 交给 defaultMember 执行
-
-**CLI REPL 模式**：
-- CLI 始终使用 Session 模式（`chat(msg, { sessionId })`）
-- Session 由 Workspace 管理（`workspace.startSession()`）
-- Zone/Session/持久化链路完整可用
-
-**旧架构（TeamLab + Team）— Legacy**
-- Team.js 和相关代码仍保留，但不再推荐使用
-- 新项目应使用 WorkSpace + Member 架构
-
-### Agent —— Think-Act 模式
-- `src/agent.js` — Agent 类，面向对象设计，支持无指引和有指引两种模式
-- Think 阶段：分析问题，规划执行方案
-- Act 阶段：根据方案调用工具执行
-- 支持继承和重写，易于扩展
-
-**核心类：**
-```javascript
-class Agent {
-  constructor({ name, role, verbose, maxRounds }) { }
-  async run(userMessage, options) { }
-  async runWithGuidance(userMessage, options) { }
-}
-```
-
-**相关文档：**
-- `AGENT_OO_REFACTORING.md` — 完整的重构文档
+### 核心类
+- **Zone** — 全局入口，多 Workspace 管理
+- **WorkSpace** — 任务路由，Member + Session 管理
+- **Session** — 用户会话，对话历史 + 上下文裁剪
+- **Member** — 基于 Agent 的执行者
+- **Agent** — Think-Act 模式，面向对象设计
 
 ### Skill 系统
-- `src/skillRegistry.js` — Skill 注册与执行
-- `src/skills/builtins.js` — 内置 Skill（web_search, read, write, list, edit, apply_patch, exec, web_fetch, message, browser, list_skills, read_skill）
-- `src/marketplace.js` — Skill 市场，ClaWHub 官方 API
-- `src/skills/plugins/` — 已安装 Skill 目录，`index.json` 为清单
+- 内置 12 个 Skill（read/write/list/edit/exec/web_search/web_fetch/browser 等）
+- 懒加载机制：list_skills + read_skill 按需调用
+- ClaWHub 市场支持
 
-## Skill 市场（ClaWHub 官方 API）
-- 搜索：`GET /api/search?q=xxx` → `{ results: [{slug, displayName, summary}] }`
-- 详情：`GET /api/v1/skills/<slug>` → `{ skill, latestVersion, owner }`
-- 下载：`GET https://wry-manatee-359.convex.site/api/v1/download?slug=<slug>` → zip（含 SKILL.md + _meta.json）
-- ClaWHub 有严格限流（429），频繁调用需间隔
-- 安装的 Skill 以 SKILL.md 目录形式存储在 `src/skills/plugins/<slug>/`
+### 配置系统
+- `config/system.json` — 系统配置
+- `config/workspaces/*.json` — Workspace + Member 定义
+- `src/Config.js` — 配置 API
 
-## Skill 懒加载机制
-- 启动时**不在** system prompt 中注入任何 SKILL.md 内容
-- 注册两个内置工具供 LLM 按需调用：
-  - `list_skills` — 列出所有已安装 Skill 的 slug + 版本
-  - `read_skill` — 读取指定 Skill 的 SKILL.md 全文
-- Token 消耗：安装 10 个 Skill，每次请求从几千 token → 接近 0 token（仅当真正使用时才读）
+---
 
-## Context 会话管理架构（已演进 → Session 模式）
+## 文档索引
 
-> ⚠️ 以下 Context → Session 架构变更记录保留供参考，当前实现已演进。
+| 文档 | 内容 |
+|------|------|
+| `docs/WORKSPACE.md` | Zone/WorkSpace/Session 架构 |
+| `docs/SESSION.md` | Session 会话管理 |
+| `docs/AGENT.md` | Agent 面向对象设计 |
+| `docs/CONTEXT_MANAGER.md` | 上下文裁剪器 |
+| `docs/SKILL_REGISTRY.md` | Skill 注册机制 |
+| `docs/MARKETPLACE.md` | ClaWHub 市场 |
+| `docs/MEMORY.md` | 长期记忆系统 |
+| `docs/ZONE.md` | Zone 架构 |
+| `docs/GOAL_TRACKER.md` | 目标追踪器 |
+| `docs/GOAL_DAG_SYSTEM.md` | Goal/Task DAG 系统 |
 
-### 历史变更
-- `src/Context.js` → 演进为 `src/Session.js`：会话上下文管理器（融合对话历史 + 上下文裁剪）
-- `src/ContextManager.js` → 重命名为 `src/ContextOptimizer.js`：上下文裁剪器
-
-### Session 类职责
-```javascript
-class Session {
-  id              // 会话 ID（全局唯一，隶属于 Workspace）
-  memberId        // 关联的 Member ID
-  member          // Member 实例
-  chatHistory     // 用户 ↔ Member 对话
-  internalHistory  // Member ↔ Manager 内部记录
-  messages        // 完整消息列表（含元数据）
-  contextManager  // 上下文裁剪（ContextOptimizer）
-  save()          // 文件持久化 → .workspace/sessions/
-}
-```
-
-### Zone 生命周期
-- `zone.initialize()` → 扫描 system.json
-- `zone.createWorkspace({ id, path })` → 创建 + 注册
-- `zone.loadWorkspace(id)` → 实例化 + 初始化 + 恢复 Session
-- `zone.closeWorkspace(id)` → `workspace.save()` + 从内存卸载
-
-## 基础工具（OpenClaw 风格）
-- `read` — 读取文件内容，支持工作区内的任意文件
-- `write` — 创建或覆盖文件，自动创建父目录
-- `list` — 列出目录内容，支持递归和显示隐藏文件
-- `edit` — 精准替换文件中的指定字符串（old_str → new_str），要求唯一匹配
-- `apply_patch` — 应用 unified diff 格式补丁，支持多文件批量修改
-- `exec` — 运行 shell 命令，返回 stdout/stderr，支持 cwd 和 timeout 参数
-- `web_fetch` — 抓取网页正文，自动 HTML→Markdown 转换，限制 20000 字符
-- `message` — 发送消息到企业微信群聊机器人（Webhook），支持 Markdown 和 @ 用户
-- `browser` — 浏览器自动化（Puppeteer），支持页面操作、截图、点击、填表单、执行 JS
-- `browser` 实现：自动使用系统 Edge/Chrome，无需手动启动或下载浏览器驱动
-- 安全机制：路径穿越保护（禁止 `..`），工作区根目录由 `WORKSPACE_ROOT` 环境变量控制
-- `WORKSPACE_ROOT` 默认值：`path.join(__dirname, '..', '..')` = 项目根目录（`src/skills` 上两级）
-- `web_fetch` SSL 问题：企业网络需设置 `NODE_FETCH_REJECT_UNAUTHORIZED=false`（已在 .env 中默认开启）
-- `browser` 使用：自动使用系统 Edge/Chrome，无需预先启动
-- 设计理念：给 LLM 最小化、通用化的基础工具，让其自主组合完成任务
-
-## PowerShell 注意事项
-- `cd /d D:\jsClaw` 在 PowerShell 中不工作，应用 `Set-Location D:\jsClaw`
-- git commit -m 带引号在 PowerShell 中有问题，改用 `.bat` 文件执行
-- Windows 下 `import(绝对路径)` 需要转成 `file:///` URL
-
-## Git 中文编码配置
-**问题**：Windows 下推送到 GitHub 的中文 commit message 显示为乱码
-
-**解决方案**（已配置）：
-```bash
-git config --global i18n.commitencoding utf-8
-git config --global i18n.logoutputencoding utf-8
-git config --global gui.encoding utf-8
-git config --global core.quotePath false
-```
-
-**配置说明**：
-- `i18n.commitencoding utf-8` - 提交信息使用 UTF-8 编码
-- `i18n.logoutputencoding utf-8` - 日志输出使用 UTF-8 编码
-- `gui.encoding utf-8` - GUI 界面使用 UTF-8 编码
-- `core.quotePath false` - 不对路径中的非 ASCII 字符进行转义
-
-**相关文档**：`GIT_UTF8_CONFIG.md`
-
-**历史乱码 commit**：
-- commit `ac81245`：原文是"实现团队协作系统并更新文档"，显示为乱码"瀹炵幇鍥㈤槦鍗忎綺绯荤粺骞舵洿鏂版枃妗?"
-- 如需修正，可使用 `git rebase -i` 手动修改
+---
 
 ## npm 命令
 ```bash
-npm start               # 启动 Agent
-npm run demo:workspace   # 运行 WorkSpace 演示
-npm run demo:agent      # 运行 Agent 类演示
-npm run skill:list      # 浏览 Skill 市场
-npm run skill:install -- <name>   # 安装 Skill
-npm run skill:remove  -- <name>   # 卸载 Skill
-npm run skill:installed           # 查看已安装
-npm run test             # 运行所有测试
-npm run test:ws          # 运行 WorkSpace + Member 测试
-npm run test:cm          # 运行 ContextManager 测试
-npm run test:gt          # 运行 GoalTracker 测试
+npm start              # CLI 交互模式
+npm run web           # Web 服务模式
+npm test              # 运行所有测试
+npm run test:ws       # WorkSpace 测试
+npm run test:cm       # ContextManager 测试
+npm run skill:list    # 浏览 Skill 市场
+npm run skill:install # 安装 Skill
 ```
 
-## Agent 类 —— 面向对象设计
+---
 
-**重构时间**：2026-03-21
+## 待办（优先级排序）
 
-**核心特性**：
-- 面向对象设计，封装状态和行为
-- 支持无指引和有指引两种模式
-- 支持继承和重写，易于扩展
-- 保留兼容函数，向后兼容
-- 统一使用 `identity` 字段（role 已废弃）
+### 高优先级（用户痛点驱动）
+- 工具执行验证机制（减少幻觉）
+- SQLite FTS5 记忆升级
+- 错误处理与恢复（Graceful Degradation）
 
-**Agent 类结构**：
-```javascript
-class Agent {
-  constructor({ name, identity, role, verbose, maxRounds }) { }
-  async run(userMessage, options) { }
-  async runWithGuidance(userMessage, options) { }
+### 中优先级
+- 可观测性（日志追踪）
+- 增强上下文管理
+- Skill 自动生成
 
-  // 私有方法
-  _prepareTools(guidance) { }
-  _think(userMessage, options) { }
-  _act(userMessage, options) { }
+### 低优先级（对标 Hermes）
+- 子代理并行、Cron、MCP、消息网关、安全沙盒、GEPA 进化
 
-  // Setter 方法
-  setName(name) { }
-  setIdentity(identity) { }
-  setRole(role) { }  // deprecated, use setIdentity
-  setVerbose(verbose) { }
-  setMaxRounds(maxRounds) { }
-}
-```
-
-**使用示例**：
-```javascript
-import { Agent } from './agent.js';
-
-const agent = new Agent({
-  name: '助手',
-  role: '智能助手',
-  verbose: true,
-});
-
-const result = await agent.run('你好');
-```
-
-**自定义子类**：
-```javascript
-class FileAgent extends Agent {
-  constructor() {
-    super({
-      name: '文件专家',
-      role: '专业的文件管理助手',
-      verbose: true,
-      maxRounds: 3,
-    });
-  }
-
-  async run(userMessage, options = {}) {
-    console.log('🔍 开始分析任务...');
-    const result = await super.run(userMessage, options);
-    console.log('✅ 任务完成');
-    return result;
-  }
-}
-```
-
-**多 Agent 协作**：
-```javascript
-const researcher = new Agent({ name: '研究员', role: '信息收集助手' });
-const writer = new Agent({ name: '作者', role: '内容创作助手' });
-
-const research = await researcher.run('什么是 JavaScript 闭包？');
-const article = await writer.run(`写一篇文章：\n\n${research.result}`);
-```
-
-**相关文件**：
-- `src/agent.js` — Agent 类实现（含兼容函数）
-- `AGENT_OO_REFACTORING.md` — 完整的重构文档
-- `.workbuddy/REFACTOR_SUMMARY.md` — 重构总结
-
-**向后兼容**：
-- 保留 `runAgentWithThink` 和 `runAgentWithGuidance` 函数
-- 兼容函数内部使用 Agent 类实现
-- 旧代码无需修改
-
-**优势**：
-- ✅ 更好的封装性：状态和行为封装在对象内部
-- ✅ 更强的可扩展性：支持继承和重写
-- ✅ 更好的可复用性：创建多个独立 Agent 实例
-- ✅ 更清晰的职责分离：私有方法封装内部逻辑
-- ✅ 向后兼容：保留原有函数接口
-
-**测试结果**：
-- ✅ Agent 类创建成功
-- ✅ Agent.run() 方法正常工作
-- ✅ Agent.runWithGuidance() 方法正常工作
-- ✅ Setter 方法正常工作
-- ✅ 兼容函数正常工作
-
-**未来扩展**：
-- 生命周期钩子（beforeRun, afterRun）
-- 中间件系统
-- 事件系统（on error, on action, on complete）
-- 插件系统
-
-## WorkSpace 重构（2026-03-21）
-
-**重构目标**：将 TeamLab 重构为 WorkSpace，实现基于 teamId 的显式任务路由
-
-**核心变更**：
-1. 新增 `src/WorkSpace.js` — WorkSpace 核心实现
-2. 新增 `WORKSPACE.md` — WorkSpace 使用文档
-3. 新增 `WORKSPACE_REFACTORING.md` — 重构总结
-4. 更新 `src/demo-team.js` — 使用 WorkSpace API
-5. 更新 `README.md` — 更新文档说明
-
-**WorkSpace 核心职责**：
-1. Team 生命周期管理（createTeam, destroyTeam, initialize）
-2. 任务路由（submitTask: 带 teamId → Team，不带 → Agent）
-3. Team 访问控制（enterTeam, exitTeam, listTeams）
-
-**任务路由逻辑**：
-- 旧架构（TeamLab）：用户 → TeamLab → (当前在 Team?) → Leader 决策
-- 新架构（WorkSpace）：用户 → WorkSpace → (任务有 teamId?) → 显式路由
-
-**API 变更**：
-```javascript
-// 旧 API（TeamLab）
-const teamSystem = new TeamLab();
-await teamSystem.initialize();
-const result = await teamSystem.submitTask('简单任务');
-
-// 新 API（WorkSpace）
-const workspace = new WorkSpace();
-await workspace.initialize();
-
-// 交给 Agent（不带 teamId）
-const result1 = await workspace.submitTask('简单任务');
-
-// 交给指定 Team（带 teamId）
-const result2 = await workspace.submitTask({
-  description: '复杂任务',
-  teamId: 'dev-team'
-});
-```
-
-**返回结果格式**：
-```javascript
-{
-  success: boolean,
-  executor: 'Agent' | 'Team',
-  executorName: string,
-  teamId?: string,
-  result?: any,
-  error?: string,
-  availableTeams?: Array<{ id, name }>
-}
-```
-
-**改进点**：
-- ✅ 更清晰的路由逻辑：显式指定 teamId 或默认使用 Agent
-- ✅ 更简单的接口：统一 submitTask() 方法
-- ✅ 更可控的执行：用户明确知道任务会交给谁执行
-- ✅ 保持兼容：支持传统的进入/退出 Team 模式
-
-**测试结果**：
-- ✅ `npm run demo:team` 运行成功
-- ✅ WorkSpace 初始化正常，加载 3 个 Teams
-- ✅ 不带 teamId 的任务正确交给 Agent
-- ✅ 带 teamId 的任务正确交给指定 Team
-- ✅ 进入 Team 后提交任务正常工作
-
-## ContextManager —— 上下文自动清理机制（P0）
-
-**实现时间**：2026-05-15
-
-**核心功能**：自动管理对话历史，控制 token 消耗，避免超出 LLM 上下文限制
-
-**核心策略**：
-1. 保留系统提示（不裁剪）
-2. 保留最近N轮完整对话（preserveRecent）
-3. 旧消息 → LLM摘要 或 简单裁剪
-4. 超过阈值自动触发（maxTokens）
-
-**相关文件**：
-- `src/ContextManager.js` — ContextManager 核心实现
-- `src/agent.js` — Agent 集成 ContextManager
-- `CONTEXT_MANAGER.md` — 使用文档
-
-**API**：
-```javascript
-// 独立使用
-const cm = new ContextManager({ maxTokens: 6000, preserveRecent: 4 });
-cm.prune(messages);           // 同步裁剪
-await cm.pruneAsync(messages); // 异步裁剪（LLM摘要）
-cm.estimateTokens(messages);   // 估算token
-cm.getStats();                // 统计信息
-
-// Agent集成（自动管理）
-const agent = new Agent({
-  contextManager: { maxTokens: 6000, preserveRecent: 4 }
-});
-const result = await agent.run('消息', { history: longHistory });
-```
-
-**测试结果**：
-- ✅ Token估算功能正常
-- ✅ 自动裁剪功能正常
-- ✅ Agent集成正常
-- ✅ 大规模裁剪测试通过（61条→5条，节省2699 tokens）
-
-**配置参数**：
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| maxTokens | 6000 | 最大保留token数 |
-| preserveRecent | 4 | 保留最近N轮对话 |
-| autoPrune | true | 是否自动裁剪 |
-| summaryModel | qwen-plus | LLM摘要模型 |
-
-## GoalTracker —— 目标保持机制（P1）
-
-**实现时间**：2026-05-15
-
-**核心功能**：追踪和管理长期目标，确保Agent在多轮对话中保持目标一致性
-
-**相关文件**：
-- `src/GoalTracker.js` — GoalTracker 核心实现
-- `src/agent.js` — Agent 集成 GoalTracker
-- `GOAL_TRACKER.md` — 使用文档
-
-**API**：
-```javascript
-// 独立使用
-const tracker = new GoalTracker();
-tracker.createGoal('目标描述', { priority: 3, tags: ['标签'] });
-tracker.addCheckpoint(goalId, '检查点');
-tracker.completeCheckpoint(goalId, cpId);
-tracker.addAchievement(goalId, '成就');
-tracker.addBlocker(goalId, '阻碍');
-tracker.getGoalContext();  // 生成注入Agent的上下文
-
-// Agent集成（自动注入目标）
-const agent = new Agent({
-  goalTracker: { autoSave: true }
-});
-agent.createGoal('分析市场');
-agent.addGoalCheckpoint('获取数据');
-agent.updateGoalProgress(50);
-await agent.run('生成报告');  // 自动注入目标上下文
-```
-
-**目标状态**：active, completed, paused, cancelled, failed
-
-**优先级**：LOW(1), NORMAL(2), HIGH(3), CRITICAL(4)
-
-**测试结果**：
-- ✅ 目标创建、切换、状态管理正常
-- ✅ 检查点添加、完成、进度更新正常
-- ✅ 成就/阻碍记录正常
-- ✅ 上下文生成正常
-- ✅ 事件监听正常
-- ✅ Agent集成正常
-
-## WorkspaceMemory —— 工作空间记忆系统
-
-**实现时间**：2026-05-15
-
-**核心功能**：
-- 跨会话持久化记忆
-- 自动加载/保存记忆到 `.memory` 目录
-- 记忆提炼和更新机制
-- 智能注入到 Agent 的 system prompt
-
-**目录结构**：
-```
-data/workspaces/<workspaceId>/.memory/
-├── MEMORY.md          ← 主记忆文件
-├── YYYY-MM-DD.md      ← 每日记忆
-└── <category>/        ← 按分类组织（可选）
-```
-
-**相关文件**：
-- `src/Memory.js` — WorkspaceMemory 核心实现
-- `src/WorkSpace.js` — WorkSpace 集成记忆系统
-- `src/Member.js` — Member 使用记忆构建 prompt
-- `src/Config.js` — 提供 getWorkspaceMemoryPath() 方法
-
-**核心 API**：
-```javascript
-// WorkspaceMemory 类
-const memory = new WorkspaceMemory(memoryDir);
-memory.load();                              // 从 .memory 目录加载所有记忆
-memory.save(content, filename);              // 保存记忆到文件
-memory.distill(content, options);           // 提炼内容为结构化记忆
-memory.update(filename, newContent);          // 更新现有记忆
-memory.getForSystemPrompt();                 // 生成供 system prompt 使用的内容
-memory.search(keyword);                      // 搜索记忆
-memory.getCount();                           // 获取记忆数量
-
-// WorkSpace 集成
-const workspace = new WorkSpace({ id: 'default' });
-await workspace.initialize();
-workspace.getMemory();                       // 获取 WorkspaceMemory 实例
-workspace.getMemoryForPrompt();               // 获取用于 system prompt 的记忆
-workspace.saveMemory(content, options);      // 保存记忆
-```
-
-**Member 集成**：
-```javascript
-// buildSystemPrompt() 自动接收 workspaceMemory 参数
-const prompt = member.buildSystemPrompt(workspaceMemory);
-// 输出格式：
-// # 身份定义
-// <identity>
-//
-// # 性格特征
-// <soul>
-//
-// # 角色定位
-// 你是 <name>。
-//
-// # 可用技能
-// <skills>
-//
-// # 工作空间记忆       ← 仅当有记忆时添加
-// <memory content>
-```
-
-**自动创建目录**：
-- Config 在初始化时自动创建 `data/workspaces/<id>/` 和 `.memory/` 目录
-- 无需手动创建
-
-**Git 提交记录**：
-- commit `8e2ac2f`：集成工作空间记忆系统到 Member prompt
-- commit `c8fb632`：修复配置字段不一致
-- commit `1864f07`：workspace 定义增加 path 字段，自动创建 .memory 目录
-
-## Goal DAG 系统（2026-05-15）
-
-**核心功能**：实现 DAG 驱动的目标管理系统
-
-**组件架构**：
-```
-Manager（管理者）— 协调 Goal 执行和 Member 分派
-├── Goal — 统一 DAG 节点
-│   ├── children[] — 子 Goal（内部节点）
-│   ├── tasks[] — Task（叶子节点）
-│   ├── dependsOn — DAG 依赖
-│   └── sequential — 执行顺序
-└── Member — 执行者
-```
-
-**重构 (2026-05-16)**：SubGoal.js 已合并到 Goal.js
-- 统一节点类型：Goal（内部节点/叶子节点）
-- 叶子节点包含 tasks[]
-- 内部节点包含 children[]（子 Goal）
-- Task.goalId 替代 Task.subGoalId
-
-**相关文件**：
-- `src/Goal.js` — 统一 Goal 类（DAG 管理、状态机）
-- `src/Task.js` — Task 类（最小执行单元）
-- `src/Manager.js` — Manager 类（协调器）
-- `tests/TestGoalDag.js` — 测试用例
-- `docs/GOAL_DAG_SYSTEM.md` — 使用文档
-
-**状态机**：
-- Task: `PENDING → RUNNING → SUCCESS/FAILED/RETRY`
-- Goal: `PENDING → READY → IN_PROGRESS → COMPLETED/FAILED`
-
-**DAG 规格格式**：
-```javascript
-[
-  { id: 'sg1', dependsOn: [], tasks: [{ id: 't1', tool: 'web_search', args: {} }] },
-  { id: 'sg2', dependsOn: ['sg1'], tasks: [{ id: 't2', tool: 'exec', args: {} }] }
-]
-```
-
-**测试结果**：✅ 10/10 通过
-- ✅ 简单 Goal（无依赖）
-- ✅ 顺序执行 Goal
-- ✅ DAG 依赖 Goal
-- ✅ 失败 Task 与重试
-- ✅ 进度跟踪
-- ✅ 持久化（导出/导入）
-- ✅ 验收标准（规则式）
-- ✅ 验收标准（函数式）
-- ✅ 人工验收（描述式）
-- ✅ 嵌套字段验收
-
-**Task 验收标准**：
-- `goalId`：Task 所属的 Goal ID（叶子节点）
-- `acceptanceCriteria`：验收标准，支持三种类型：
-  1. **函数式**：`{ type: 'function', fn: (result) => boolean }`
-  2. **规则式**：`{ type: 'rules', checks: [{ field, operator, value }] }`
-  3. **描述式**：`{ type: 'description', description: '...' }`（人工验收）
-- 支持嵌套字段：`response.data.items.length`
-- 支持 15+ 操作符：equals, greaterThan, contains, isNull, matches 等
-
-**Bug 修复**：
-- Goal.updateStatus()：修复状态转换逻辑，支持 IN_PROGRESS 状态
-
-## jsClaw 框架文档（2026-05-15/16）
-
-### 完成工作
-为 jsClaw 框架编写了完整的结构化文档，包含 12 个文档文件（docs/）：
-
-| 文档 | 说明 |
-|------|------|
-| `README.md` | 框架概览、架构图、快速开始、文档索引 |
-| `AGENT.md` | Think-Act 模式、核心方法、目标管理、状态机、继承扩展 |
-| `CONTEXT_MANAGER.md` | 上下文自动清理、Token 估算、裁剪策略、配置参数 |
-| `GOAL_DAG_SYSTEM.md` | Goal/Task 统一 DAG 系统、验收标准、状态机 |
-| `WORKSPACE.md` | WorkSpace、Member、Config、Zone 集成、任务路由 |
-| `SKILL_REGISTRY.md` | Skill 注册、内置 Skill、懒加载机制、扩展开发 |
-| `LLM.md` | LLM 客户端配置、多 Provider 预设、环境变量 |
-| `MEMORY.md` | WorkspaceMemory、记忆持久化、文件格式、自动注入 |
-| `ZONE.md` | Zone 生命周期管理、多 Zone 管理、API |
-| `MARKETPLACE.md` | ClaWHub Skill 市场、API、限流说明、安装管理 |
-| `CONFIG.md` | 系统配置、环境变量、Workspace 配置、Config API |
-| `GOAL_TRACKER.md` | 目标追踪器、检查点、成就/阻碍记录 |
-
-### CONFIG.md 核心内容
-- 环境变量配置（LLM_PROVIDER, MODEL_NAME, OPENAI_API_KEY）
-- Provider 预设（千问、OpenAI、DeepSeek、Ollama）
-- 系统配置文件（config/system.json）结构
-- Workspace 配置（config/workspaces/*.json）Member 定义
-- Config API 完整文档（getInfo, listWorkspaces, getWorkspace 等）
-- 最佳实践（环境隔离、目录结构、敏感信息管理）
-- 配置优先级和验证清单
-
-## Identity 统一重构（2026-05-16）
-
-**完成时间**：2026-05-16
-
-**重构目标**：统一 Agent、Member、Manager 的身份字段命名
-
-**变更内容**：
-
-### Agent.js
-- 构造函数参数：`identity` 为主，`role` 作为兼容参数
-- 内部存储：统一使用 `this.identity`
-- 新增方法：`setIdentity()`, `getIdentity()`
-- 废弃方法：`setRole()`, `getRole()`（标记为 @deprecated）
-
-### Member.js
-- 构造函数传给父类：使用 `identity` 字段
-- 移除重复赋值：`this.identity` 由父类构造函数设置
-- API 返回值：`getInfo()`, `getSummary()` 返回 `identity` 字段而非 `role`
-
-### Manager.js
-- 已正确使用 `identity` 字段，无需修改
-
-**命名规范**：
-| 字段 | 用途 | 备注 |
-|------|------|------|
-| `name` | 显示名称 | 如 "开发者"、"研究员" |
-| `identity` | 身份描述 | 如 "专业后端开发工程师" |
-| `soul` | 性格特征 | 如 "逻辑严谨，善于规划" |
-
-**测试结果**：✅ 所有 5 个测试通过
-
-## 前端 UI 迭代优化（2026-05-16）
-
-**完成时间**：2026-05-16
-
-**优化内容**：`src/public/index.html`
-
-### Header 简化
-- 移除消息数量和模型名称显示
-- 只保留会话标题（`header-session-title`）
-- Header Controls 区域保留为空（原用于 Toggle 等）
-
-### 侧边栏精简
-- 移除 "jsClaw" 标题
-- 移除左侧边栏下部的 New Chat 按钮
-- 保留图标列表（Chat, Search, Files, Plugins, Docs, Settings）
-
-### 输入区重构
-- **第一行**：纯文本输入框（`textarea`），占据全部宽度
-- **第二行**（`input-bottom`）：
-  - **左侧**：模型选择器（`model-indicator`）+ 下拉菜单（`model-dropdown`）
-  - **右侧**：Think 按钮、Settings 按钮、Send 按钮
-- 删除快捷键提示（`input-tips`）
-
-### 模型选择器
-- 使用 `position: absolute; bottom: 100%` 实现下拉弹出
-- 支持多模型切换（DeepSeek-R1-Distill-Qwen-7B, Qwen Plus, Qwen Turbo）
-
-**Git 提交**：
-- `18fde14` - refactor: 移除 Craft/Plan/Ask 工作模式选择,简化输入区域
-
+详见 README.md Roadmap 章节。

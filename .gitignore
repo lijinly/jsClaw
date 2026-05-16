@@ -5,3 +5,7 @@ data/
 temp/
 *.log
 .DS_Store
+.workbuddy
+.workspace
+.memory
+.lingma

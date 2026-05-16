@@ -1,6 +1,6 @@
 // 调试 LLM 调用（放在项目根目录，方便直接运行）
 import 'dotenv/config';
-import { initLLM, chat } from './src/Llm.js';
+import { initLLM, chat } from '../src/Llm.js';
 
 console.log('=== LLM 配置诊断 ===');
 console.log('Provider:', process.env.LLM_PROVIDER || '(未设置，使用默认 openai)');
