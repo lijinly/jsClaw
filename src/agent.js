@@ -3,7 +3,7 @@
 // ─────────────────────────────────────────────
 import { chat } from './Llm.js';
 import { getToolDefinitions, executeToolCalls } from './SkillRegistry.js';
-import { ContextManager } from './Context.js';
+import { ContextOptimizer } from './ContextOptimizer.js';
 import { GoalTracker } from './Goal.js';
 
 /**
@@ -14,7 +14,7 @@ import { GoalTracker } from './Goal.js';
  * - 支持 Think-Act 模式
  * - 支持自定义思考策略
  * - 可配置的日志输出
- * - 内置上下文自动清理（ContextManager）
+ * - 内置上下文自动清理（ContextOptimizer）
  * - 内置目标保持机制（GoalTracker）
  */
 export class Agent {
@@ -25,7 +25,7 @@ export class Agent {
    * @param {string} [options.identity='智能助手'] - Agent 身份描述
    * @param {boolean} [options.verbose=false]       - 是否打印详细日志
    * @param {number}  [options.maxRounds=5]         - Act 阶段最大轮次
-   * @param {object}  [options.contextManager]     - ContextManager配置
+   * @param {object}  [options.contextManager]     - ContextOptimizer配置
    * @param {object}  [options.goalTracker]        - GoalTracker配置
    */
   constructor({
@@ -42,7 +42,7 @@ export class Agent {
     this.maxRounds = maxRounds;
 
     // 初始化上下文管理器
-    this.contextManager = new ContextManager({
+    this.contextManager = new ContextOptimizer({
       maxTokens: contextConfig.maxTokens ?? 6000,
       preserveRecent: contextConfig.preserveRecent ?? 4,
       ...contextConfig,

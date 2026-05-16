@@ -62,7 +62,8 @@ Agent (基类)
 | 模块 | 文件 | 说明 |
 |------|------|------|
 | **Agent** | `src/Agent.js` | Think-Act 模式核心实现 |
-| **ContextManager** | `src/Context.js` | 上下文自动清理，防止 token 溢出 |
+| **ContextManager** | `src/ContextManager.js` | 上下文自动清理，防止 token 溢出 |
+| **Session** | `src/Session.js` | 会话上下文（含 Member 关联、对话历史） |
 | **Goal** | `src/Goal.js` | 统一 DAG 节点管理 |
 | **Manager** | `src/Manager.js` | Goal 执行协调器 |
 | **Member** | `src/Member.js` | 工作空间中的执行成员 |
@@ -99,6 +100,7 @@ npm run skill:install -- <slug>  # 安装
 |------|------|
 | `AGENT.md` | Agent Think-Act 模式详解 |
 | `CONTEXT_MANAGER.md` | 上下文自动清理机制 |
+| `SESSION.md` | Session 会话管理 |
 | `GOAL_DAG_SYSTEM.md` | Goal-Task 统一 DAG 系统 |
 | `WORKSPACE.md` | WorkSpace + Member 架构 |
 | `SKILL_REGISTRY.md` | Skill 注册与执行 |

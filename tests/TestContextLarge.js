@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────
-//  ContextManager 大规模裁剪测试（模拟真实场景）
+//  ContextOptimizer 大规模裁剪测试（模拟真实场景）
 // ─────────────────────────────────────────────
-import { ContextManager } from '../src/Context.js';
+import { ContextOptimizer } from '../src/ContextOptimizer.js';
 
 // 创建真实规模的消息（模拟实际使用场景）
 function createRealisticHistory(rounds = 30) {
@@ -64,7 +64,7 @@ function createRealisticHistory(rounds = 30) {
 // 测试场景：使用更低的阈值来触发裁剪
 console.log('========== 大规模裁剪测试 ==========\n');
 
-const cm = new ContextManager({
+const cm = new ContextOptimizer({
   maxTokens: 500,  // 低阈值，强制触发裁剪
   preserveRecent: 2,
   verbose: true,

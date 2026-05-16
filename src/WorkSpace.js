@@ -1,12 +1,23 @@
 // ─────────────────────────────────────────────
-//  WorkSpace —— 工作空间
+//  WorkSpace —— 工作空间（物理实例）
+//
+//  每个 Workspace 对应一个物理目录，拥有独立 Manager 和 Session 列表。
+//  由 Zone 统一管理生命周期（创建/加载/关闭/删除）。
+//
+//  目录结构：
+//  <workspace-path>/
+//  ├── .workspace/
+//  │   └── sessions/
+//  │       └── ws-{id}-s-{sessionId}.json
+//  └── .memory/          ← WorkspaceMemory
 // ─────────────────────────────────────────────
 import { Member } from './Member.js';
 import { Manager } from './Manager.js';
 import { Config, getConfig } from './Config.js';
 import { WorkspaceMemory } from './Memory.js';
-import { readFileSync, existsSync } from 'fs';
-import { join, dirname, resolve } from 'path';
+import { Session } from './Session.js';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from 'fs';
+import { join, dirname, resolve, isAbsolute } from 'path';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -42,6 +53,13 @@ export class WorkSpace {
     this.description = options.description || '';
     this.configPath = options.configPath || null;
 
+    // ── 物理路径 ──────────────────────────────
+    // Zone.createWorkspace / loadWorkspace 传入，指向物理目录
+    this.path = options.path || null;
+    this.sessionsDir = this.path
+      ? join(this.path, '.workspace', 'sessions')
+      : null;
+
     // 系统配置
     this.config = options.config || getConfig();
 
@@ -57,41 +75,58 @@ export class WorkSpace {
     // 工作空间记忆
     this.memory = null;
     this.memoryDir = null;
+
+    // ── Session 集合 ─────────────────────────
+    this._sessions = new Map();
   }
 
   /**
    * 初始化 WorkSpace
-   * 加载配置、记忆并创建 Members
+   * 确保物理目录结构，加载记忆，创建 Members，恢复 Sessions
    */
   async initialize() {
     console.log(`\n🚀 WorkSpace 初始化中: ${this.name}`);
     console.log('─'.repeat(50));
 
-    // 使用 Config 加载配置
+    // ── 1. 确保物理目录结构 ─────────────────
+    if (this.path) {
+      const dirs = [
+        this.path,
+        join(this.path, '.workspace'),
+        this.sessionsDir,
+        join(this.path, '.memory'),
+      ];
+      for (const dir of dirs) {
+        if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+      }
+    }
+
+    // ── 2. 加载工作空间记忆 ───────────────────
+    this._initializeMemory();
+
+    // ── 3. 加载 Members ──────────────────────
     const workspaceConfig = this.config.getWorkspace(this.id);
     const membersFromConfig = this.config.getWorkspaceMembers(this.id);
 
-    // 加载工作空间记忆
-    this._initializeMemory();
-
-    // 加载 Members
     if (membersFromConfig.length > 0) {
-      // 使用 Config 中的成员配置
       for (const memberConfig of membersFromConfig) {
         await this.addMember(memberConfig);
       }
     }
-    
-    // 如果没有成员配置，创建默认 Manager
+
     if (this.members.size === 0) {
       await this.createDefaultManager();
     }
+
+    // ── 4. 恢复 Sessions ─────────────────────
+    await this._restoreSessions();
 
     console.log('─'.repeat(50));
     console.log(`✅ 初始化完成: ${this.members.size} 个 Member(s)`);
     if (this.memory) {
       console.log(`   记忆: ${this.memory.getCount()} 条已加载`);
     }
+    console.log(`   Session(s): ${this._sessions.size} 个已恢复`);
     console.log('');
 
     // 列出所有 Members
@@ -517,9 +552,10 @@ export class WorkSpace {
       id: this.id,
       name: this.name,
       description: this.description,
+      path: this.path,
       memberCount: this.members.size,
       managerCount: managers.length,
-      memberCount: regularMembers.length,
+      regularMemberCount: regularMembers.length,
       members: this.getMemberSummaries(),
       managers: managers.map(m => m.getStatus()),
       defaultMember: this.defaultMember ? {
@@ -531,6 +567,126 @@ export class WorkSpace {
         count: this.memory.getCount(),
         dir: this.memoryDir,
       } : null,
+      sessionCount: this._sessions.size,
     };
+  }
+
+  // ═══════════════════════════════════════════
+  //  Session 管理
+  //  每个 Session 隶属于本 Workspace，持久化到 .workspace/sessions/
+  // ═══════════════════════════════════════════
+
+  /**
+   * 从 .workspace/sessions/ 恢复已有 Session
+   * @private
+   */
+  async _restoreSessions() {
+    if (!this.sessionsDir || !existsSync(this.sessionsDir)) return;
+
+    try {
+      const files = readdirSync(this.sessionsDir)
+        .filter(f => f.startsWith(`ws-${this.id}-s-`) && f.endsWith('.json'));
+
+      for (const file of files) {
+        try {
+          const data = JSON.parse(readFileSync(join(this.sessionsDir, file), 'utf-8'));
+          const session = Session.fromFile(data, this.id);
+
+          // 重建 Member 引用（Members 已在此之前加载）
+          session.workspace = this;
+          session.member = this.getMember(session.memberId)
+            || this.getMember('default');
+
+          // 重建 ContextOptimizer
+          session.contextManager = null; // 暂时置空，首次 userMessage 时重建
+
+          this._sessions.set(session.id, session);
+        } catch (err) {
+          console.warn(`⚠️ Session 恢复失败: ${file} — ${err.message}`);
+        }
+      }
+    } catch (err) {
+      console.warn(`⚠️ Session 目录读取失败: ${err.message}`);
+    }
+  }
+
+  /**
+   * 创建新 Session（建立与用户的会话）
+   * @param {object} [opts]
+   * @param {string}  [opts.sessionId]       - Session ID（不填则自动生成）
+   * @param {string}  [opts.memberId='default'] - 关联 Member
+   * @param {string}  [opts.title]           - 会话标题
+   * @param {'member'|'team'} [opts.mode='member']
+   * @returns {Session}
+   */
+  startSession(opts = {}) {
+    const sessionId = opts.sessionId || `s-${Date.now()}`;
+
+    if (this._sessions.has(sessionId)) {
+      return this._sessions.get(sessionId);
+    }
+
+    const session = new Session({
+      sessionId,
+      memberId: opts.memberId || 'default',
+      workspace: this,
+    });
+
+    if (opts.title) session.setTitle(opts.title);
+    if (opts.mode)  session.setMode(opts.mode);
+
+    this._sessions.set(sessionId, session);
+    return session;
+  }
+
+  /**
+   * 获取 Session（不存在则返回 null）
+   * @param {string} sessionId
+   * @returns {Session|null}
+   */
+  getSession(sessionId) {
+    return this._sessions.get(sessionId) || null;
+  }
+
+  /**
+   * 删除 Session（从内存移除，不删除文件）
+   * @param {string} sessionId
+   * @returns {boolean}
+   */
+  closeSession(sessionId) {
+    return this._sessions.delete(sessionId);
+  }
+
+  /**
+   * 列出所有 Session 概要
+   * @returns {Array<object>}
+   */
+  listSessions() {
+    return Array.from(this._sessions.values())
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .map(s => s.getSummary());
+  }
+
+  // ═══════════════════════════════════════════
+  //  持久化
+  // ═══════════════════════════════════════════
+
+  /**
+   * 保存 Workspace 状态到磁盘
+   * - 保存所有活跃 Session
+   * - 触发 Zone.closeWorkspace() 调用
+   * @returns {Promise<void>}
+   */
+  async save() {
+    let savedCount = 0;
+    for (const session of this._sessions.values()) {
+      try {
+        session.save();
+        savedCount++;
+      } catch (err) {
+        console.warn(`⚠️ Session 保存失败: ${session.id} — ${err.message}`);
+      }
+    }
+    console.log(`✓ Workspace 已保存: ${savedCount} 个 Session`);
   }
 }

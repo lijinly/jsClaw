@@ -1,8 +1,8 @@
 // ─────────────────────────────────────────────
-//  ContextManager + Agent 集成测试
+//  ContextOptimizer + Agent 集成测试
 // ─────────────────────────────────────────────
 import { Agent } from '../src/Agent.js';
-import { ContextManager } from '../src/Context.js';
+import { ContextOptimizer } from '../src/ContextOptimizer.js';
 
 // 创建大量模拟消息
 function createLargeHistory(count = 20) {
@@ -24,7 +24,7 @@ function createLargeHistory(count = 20) {
 
 // 测试1：Token估算准确性
 console.log('\n========== 测试1：大量消息Token估算 ==========');
-const cm = new ContextManager({ maxTokens: 2000 });
+const cm = new ContextOptimizer({ maxTokens: 2000 });
 const largeHistory = createLargeHistory(20);
 const tokens = cm.estimateTokens(largeHistory);
 console.log(`消息数: ${largeHistory.length}, 估算token: ${tokens}`);

@@ -2,10 +2,10 @@
   "name": "jsclaw",
   "version": "1.0.0",
   "description": "极简 LLM + Skill 集成应用",
-  "main": "src/Index.js",
+  "main": "src/CLI.js",
   "type": "module",
   "scripts": {
-    "start": "node src/Index.js",
+    "start": "node src/CLI.js",
     "web": "node src/Server.js",
     "demo:workspace": "node tests/DemoWorkspace.js",
     "skill:list": "node src/Marketplace.js list",

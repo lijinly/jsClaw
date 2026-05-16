@@ -89,9 +89,9 @@ export async function runTests(testCases, verbose = true) {
 // 如果直接运行此文件
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const testFiles = [
-    { name: 'ContextManager 基础测试', file: './test-context-manager.js' },
-    { name: 'ContextManager 大规模测试', file: './test-context-large.js' },
-    { name: 'ContextManager + Agent 集成', file: './test-context-integration.js' },
+    { name: 'ContextOptimizer 基础测试', file: './test-context-manager.js' },
+    { name: 'ContextOptimizer 大规模测试', file: './test-context-large.js' },
+    { name: 'ContextOptimizer + Agent 集成', file: './test-context-integration.js' },
     { name: 'GoalTracker 基础测试', file: './test-goal-tracker.js' },
     { name: 'GoalTracker + Agent 集成', file: './test-goal-agent-integration.js' },
     { name: 'WorkSpace + Member 架构测试', file: './test-workspace-member.js' },

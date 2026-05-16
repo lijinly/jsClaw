@@ -1,11 +1,11 @@
 // ─────────────────────────────────────────────
-//  ContextManager 测试
+//  ContextOptimizer 测试
 // ─────────────────────────────────────────────
-import { ContextManager, createContextManager } from '../src/Context.js';
+import { ContextOptimizer, createContextOptimizer } from '../src/ContextOptimizer.js';
 
 // 测试1：基础token估算
 console.log('\n========== 测试1：Token估算 ==========');
-const cm = new ContextManager({ verbose: true });
+const cm = new ContextOptimizer({ verbose: true });
 
 const testMessages = [
   { role: 'system', content: '你是智能助手' },
@@ -34,7 +34,7 @@ console.log('结果: 保持不变 ✓');
 
 // 测试3：创建工厂函数
 console.log('\n========== 测试3：工厂函数 ==========');
-const customCM = createContextManager({
+const customCM = createContextOptimizer({
   maxTokens: 3000,
   preserveRecent: 2,
 });
@@ -45,5 +45,5 @@ console.log('\n========== 测试4：统计信息 ==========');
 const stats = cm.getStats();
 console.log('统计:', stats);
 
-console.log('\n✅ ContextManager 基础测试完成');
+console.log('\n✅ ContextOptimizer 基础测试完成');
 console.log('\n注意：完整测试（包括LLM摘要）需要有效的API Key');

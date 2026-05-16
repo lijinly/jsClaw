@@ -1,0 +1,19 @@
+{
+  "version": "2.0.0",
+
+  "zone": {
+    "id": "default",
+    "name": "默认Zone"
+  },
+
+  "workspaces": {
+    "default": {
+      "id": "default",
+      "name": "默认工作空间",
+      "description": "系统启动时自动创建的默认工作空间",
+      "path": ".",
+      "configPath": "config/workspaces/default.json",
+      "createdAt": "2026-03-01T00:00:00.000Z"
+    }
+  }
+}

@@ -7,9 +7,9 @@ import { runTests } from './TestRunner.js';
 
 // 测试文件列表
 const testFiles = [
-  { name: 'ContextManager 基础测试', file: './TestContextManager.js' },
-  { name: 'ContextManager 大规模测试', file: './TestContextLarge.js' },
-  { name: 'ContextManager + Agent 集成', file: './TestContextIntegration.js' },
+  { name: 'ContextOptimizer 基础测试', file: './TestContextManager.js' },
+  { name: 'ContextOptimizer 大规模测试', file: './TestContextLarge.js' },
+  { name: 'ContextOptimizer + Agent 集成', file: './TestContextIntegration.js' },
   { name: 'GoalTracker 基础测试', file: './TestGoalTracker.js' },
   { name: 'GoalTracker + Agent 集成', file: './TestGoalAgentIntegration.js' },
 ];

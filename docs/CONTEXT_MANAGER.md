@@ -42,7 +42,7 @@
 ### 构造函数
 
 ```javascript
-import { ContextManager } from './Context.js';
+import { ContextManager } from './ContextManager.js';
 
 const cm = new ContextManager({
   maxTokens: 6000,           // 最大保留 token 数（估算）
@@ -222,12 +222,19 @@ totalTokens = Σ(baseCost + contentCost + toolCost)
 // 总计 ≈ 700 tokens
 ```
 
-## 与 Agent 集成
+## 与 Session 集成
 
 ```javascript
-import { Agent } from './Agent.js';
+import { Session } from './Session.js';
+import { WorkSpace } from './WorkSpace.js';
 
-const agent = new Agent({
+const workspace = new WorkSpace({ id: 'default' });
+await workspace.initialize();
+
+const session = new Session({
+  sessionId: 'user-123',
+  memberId: 'default',
+  workspace,
   contextManager: {
     maxTokens: 6000,      // 最大 token 数
     preserveRecent: 4,    // 保留最近 4 轮
@@ -235,10 +242,9 @@ const agent = new Agent({
   },
 });
 
-// Agent.run() 自动使用 ContextManager
-const result = await agent.run('长对话任务', {
-  history: longHistory,   // 传入长历史
-  autoPrune: true,        // 启用自动裁剪
+// Session.userMessage() 自动使用 ContextManager
+const result = await session.userMessage('长对话任务', {
+  verbose: true,
 });
 ```
 

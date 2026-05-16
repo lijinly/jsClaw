@@ -1,511 +1,336 @@
 // ─────────────────────────────────────────────
-//  Zone —— Workspace 的生命周期管理器
+//  Zone —— Workspace 实例管理器（单例）
+//
+//  职责：
+//    1. 持有 Workspace 实例池（懒加载）
+//    2. 管理 system.json 注册表（workspace id → path）
+//    3. Workspace 的 CRUD（创建/加载/关闭/删除）
+//
+//  不负责：
+//    - Workspace 运行时状态（由 Workspace 自己管理）
+//    - Session 管理（由 Workspace 自己管理）
 // ─────────────────────────────────────────────
-import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, rmSync } from 'fs';
-import { join, dirname, resolve, isAbsolute } from 'path';
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
+import { join, resolve, isAbsolute, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// 默认 zones 目录
-const DEFAULT_ZONES_PATH = 'data/zones';
+// ═══════════════════════════════════════════
+//  单例
+// ═══════════════════════════════════════════
+let _zoneInstance = null;
 
-/**
- * Zone 类 —— Workspace 的生命周期管理器
- *
- * 职责：
- * 1. 创建新的 Workspace
- * 2. 加载已存在的 Workspace
- * 3. 保存 Workspace 状态（持久化）
- * 4. 卸载/销毁 Workspace
- * 5. Zone 间的 Workspace 迁移
- *
- * 目录结构：
- * data/zones/<zoneId>/
- * ├── meta.json          ← Zone 元信息
- * ├── workspaces/
- * │   ├── <workspaceId>/
- * │   │   ├── state.json  ← Workspace 运行时状态
- * │   │   ├── config.json ← Workspace 配置
- * │   │   └── .memory/   ← Workspace 记忆
- * │   └── ...
- * └── cache/             ← Zone 缓存
- */
+export function getZone() {
+  if (!_zoneInstance) {
+    _zoneInstance = new Zone();
+  }
+  return _zoneInstance;
+}
+
+export function resetZone() {
+  _zoneInstance = null;
+}
+
+// ═══════════════════════════════════════════
+//  Zone 类
+// ═══════════════════════════════════════════
+
 export class Zone {
   /**
    * @param {object} options
-   * @param {string}  [options.zoneId]        - Zone ID（默认自动生成）
-   * @param {string}  [options.name]          - Zone 名称
-   * @param {string}  [options.zonesRoot]      - Zones 根目录（默认 data/zones）
-   * @param {string}  [options.projectRoot]    - 项目根目录
+   * @param {string}  [options.id='default']         - Zone ID
+   * @param {string}  [options.name='默认Zone']     - Zone 名称
+   * @param {object}  [options.config]              - Config 实例
+   * @param {string}  [options.projectRoot]          - 项目根目录
    */
   constructor(options = {}) {
-    this.zoneId = options.zoneId || this._generateId();
-    this.name = options.name || `Zone-${this.zoneId}`;
-    this.projectRoot = options.projectRoot || resolve(__dirname, '..');
+    this.id = options.id || 'default';
+    this.name = options.name || '默认Zone';
+    this.config = options.config || null;  // Config 实例，初始化时注入
 
-    // Zones 根目录
-    this.zonesRoot = options.zonesRoot
-      ? this._resolvePath(options.zonesRoot)
-      : join(this.projectRoot, DEFAULT_ZONES_PATH);
+    // 项目根目录
+    const srcDir = dirname(fileURLToPath(import.meta.url));
+    this.projectRoot = options.projectRoot
+      || resolve(srcDir, '..');
 
-    // Zone 目录
-    this.zonePath = join(this.zonesRoot, this.zoneId);
-
-    // Workspace 目录
-    this.workspacesPath = join(this.zonePath, 'workspaces');
-
-    // 缓存的 workspace 实例
+    // Workspace 实例池（懒加载：仅在 loadWorkspace 时实例化）
     this._workspaces = new Map();
 
+    // system.json 注册表路径
+    this.registryPath = join(this.projectRoot, 'config', 'system.json');
+
     // Zone 元信息
-    this.meta = {
-      id: this.zoneId,
+    this._meta = {
+      id: this.id,
       name: this.name,
-      createdAt: null,
-      updatedAt: null,
-      workspaceCount: 0,
+      loadedCount: 0,
+      totalCount: 0,
     };
   }
 
   // ═══════════════════════════════════════════
-  //  生命周期
+  //  初始化
   // ═══════════════════════════════════════════
 
   /**
-   * 初始化 Zone（创建目录结构，加载元信息）
-   * @returns {Promise<Zone>} this
+   * 初始化 Zone
+   * 读取 system.json 注册表，扫描所有 Workspace 概要
    */
   async initialize() {
-    console.log(`\n🌐 初始化 Zone: ${this.name} (${this.zoneId})`);
+    console.log(`\n🌐 Zone 初始化: ${this.name} (${this.id})`);
 
-    // 确保目录存在
-    this._ensureDirectories();
+    // 确保 config 目录存在
+    const configDir = join(this.projectRoot, 'config');
+    if (!existsSync(configDir)) {
+      mkdirSync(configDir, { recursive: true });
+    }
 
-    // 加载元信息
-    await this._loadMeta();
+    // 读取注册表
+    const registry = this._loadRegistry();
 
-    // 加载已存在的 workspace 概要
-    await this._loadWorkspaceList();
+    // 统计
+    const workspaceIds = Object.keys(registry.workspaces || {});
+    this._meta.totalCount = workspaceIds.length;
 
-    console.log(`✓ Zone 初始化完成: ${this.meta.workspaceCount} 个 Workspace`);
+    console.log(`✓ Zone 初始化完成: ${workspaceIds.length} 个 Workspace 已注册`);
+
     return this;
   }
 
   /**
-   * 销毁 Zone（删除所有文件和目录）
-   * @param {boolean} [force=false] - 是否强制销毁（有 workspace 时也删除）
-   * @returns {Promise<boolean>} 是否成功销毁
+   * 加载并解析 system.json 注册表
+   * @private
    */
-  async destroy(force = false) {
-    const workspaces = this.listWorkspaces();
-
-    if (workspaces.length > 0 && !force) {
-      console.warn(`⚠️ Zone 包含 ${workspaces.length} 个 Workspace，请先卸载或使用 force`);
-      return false;
-    }
-
+  _loadRegistry() {
     try {
-      if (existsSync(this.zonePath)) {
-        rmSync(this.zonePath, { recursive: true, force: true });
-        console.log(`✓ Zone 已销毁: ${this.zoneId}`);
+      if (existsSync(this.registryPath)) {
+        const data = readFileSync(this.registryPath, 'utf-8');
+        return JSON.parse(data);
       }
-      return true;
     } catch (error) {
-      console.error(`❌ Zone 销毁失败: ${error.message}`);
-      return false;
+      console.warn(`⚠️ 注册表加载失败: ${error.message}`);
+    }
+    return { version: '2.0.0', zone: { id: this.id, name: this.name }, workspaces: {} };
+  }
+
+  /**
+   * 保存注册表到 system.json
+   * @private
+   */
+  _saveRegistry(registry) {
+    try {
+      writeFileSync(this.registryPath, JSON.stringify(registry, null, 2), 'utf-8');
+    } catch (error) {
+      throw new Error(`注册表保存失败: ${error.message}`);
     }
   }
 
   // ═══════════════════════════════════════════
-  //  Workspace CRUD
+  //  Workspace 注册表 CRUD
   // ═══════════════════════════════════════════
 
   /**
-   * 创建新的 Workspace
-   * @param {object} options
-   * @param {string}  options.workspaceId     - Workspace ID
-   * @param {string}  [options.name]          - Workspace 名称
-   * @param {string}  [options.description]   - Workspace 描述
-   * @param {object}  [options.config]        - Workspace 配置
-   * @param {object}  [options.members]       - Members 配置
-   * @returns {Promise<object>} 创建结果
+   * 列出所有 Workspace 概要（仅读配置，不实例化）
+   * @returns {Array<object>} Workspace 概要列表
    */
-  async createWorkspace(options) {
-    const { workspaceId, name, description = '', config = {}, members = [] } = options;
+  listWorkspaces() {
+    const registry = this._loadRegistry();
+    const workspaces = registry.workspaces || {};
 
-    if (!workspaceId) {
-      throw new Error('workspaceId 是必填项');
-    }
-
-    if (this._workspaces.has(workspaceId)) {
-      return {
-        success: false,
-        error: `Workspace 已存在: ${workspaceId}`,
-        workspace: this._workspaces.get(workspaceId),
-      };
-    }
-
-    console.log(`\n📦 创建 Workspace: ${workspaceId}`);
-
-    // Workspace 目录
-    const workspacePath = join(this.workspacesPath, workspaceId);
-    const memoryPath = join(workspacePath, '.memory');
-
-    // 确保目录存在
-    try {
-      if (!existsSync(workspacePath)) {
-        mkdirSync(workspacePath, { recursive: true });
-      }
-      if (!existsSync(memoryPath)) {
-        mkdirSync(memoryPath, { recursive: true });
-      }
-    } catch (error) {
-      return {
-        success: false,
-        error: `创建目录失败: ${error.message}`,
-      };
-    }
-
-    // Workspace 状态
-    const workspaceState = {
-      id: workspaceId,
-      name: name || workspaceId,
-      description,
-      zoneId: this.zoneId,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      status: 'created',  // created | loaded | running | saved | error
-      config,
-      members: members.map(m => ({
-        id: m.id || this._generateId(),
-        name: m.name || m.id,
-        identity: m.identity || '',
-        soul: m.soul || '',
-        skills: m.skills || [],
-      })),
-    };
-
-    // 保存状态
-    const statePath = join(workspacePath, 'state.json');
-    try {
-      writeFileSync(statePath, JSON.stringify(workspaceState, null, 2), 'utf-8');
-    } catch (error) {
-      return {
-        success: false,
-        error: `保存状态失败: ${error.message}`,
-      };
-    }
-
-    // 缓存
-    this._workspaces.set(workspaceId, workspaceState);
-    this.meta.workspaceCount++;
-    await this._saveMeta();
-
-    console.log(`✓ Workspace 创建成功: ${workspaceId}`);
-    console.log(`   路径: ${workspacePath}`);
-
-    return {
-      success: true,
-      workspace: workspaceState,
-      path: workspacePath,
-    };
+    return Object.entries(workspaces).map(([id, meta]) => ({
+      id: meta.id || id,
+      name: meta.name || id,
+      description: meta.description || '',
+      path: meta.path || '',
+      configPath: meta.configPath || null,
+      createdAt: meta.createdAt || null,
+      isLoaded: this._workspaces.has(id),
+    }));
   }
 
   /**
-   * 加载 Workspace（将配置读入内存）
-   * @param {string} workspaceId - Workspace ID
-   * @returns {Promise<object|null>} Workspace 状态
-   */
-  async loadWorkspace(workspaceId) {
-    if (this._workspaces.has(workspaceId)) {
-      const ws = this._workspaces.get(workspaceId);
-      ws.status = 'loaded';
-      return ws;
-    }
-
-    const workspacePath = join(this.workspacesPath, workspaceId);
-    const statePath = join(workspacePath, 'state.json');
-
-    if (!existsSync(statePath)) {
-      console.warn(`⚠️ Workspace 不存在: ${workspaceId}`);
-      return null;
-    }
-
-    try {
-      const stateData = readFileSync(statePath, 'utf-8');
-      const workspaceState = JSON.parse(stateData);
-      workspaceState.status = 'loaded';
-      workspaceState.zoneId = this.zoneId;
-
-      this._workspaces.set(workspaceId, workspaceState);
-      console.log(`✓ Workspace 已加载: ${workspaceId}`);
-
-      return workspaceState;
-    } catch (error) {
-      console.error(`❌ Workspace 加载失败: ${workspaceId} - ${error.message}`);
-      return null;
-    }
-  }
-
-  /**
-   * 卸载 Workspace（从内存移除，不删除文件）
-   * @param {string} workspaceId - Workspace ID
-   * @param {boolean} [save=true] - 卸载前是否保存状态
-   * @returns {Promise<boolean>}
-   */
-  async unloadWorkspace(workspaceId, save = true) {
-    if (!this._workspaces.has(workspaceId)) {
-      console.warn(`⚠️ Workspace 未加载: ${workspaceId}`);
-      return false;
-    }
-
-    const workspace = this._workspaces.get(workspaceId);
-
-    // 保存状态
-    if (save) {
-      await this.saveWorkspace(workspaceId);
-    }
-
-    workspace.status = 'saved';
-    this._workspaces.delete(workspaceId);
-
-    console.log(`✓ Workspace 已卸载: ${workspaceId}`);
-    return true;
-  }
-
-  /**
-   * 保存 Workspace 状态到磁盘
-   * @param {string} workspaceId - Workspace ID
-   * @returns {Promise<boolean>}
-   */
-  async saveWorkspace(workspaceId) {
-    const workspace = this._workspaces.get(workspaceId);
-
-    if (!workspace) {
-      console.warn(`⚠️ Workspace 未加载: ${workspaceId}`);
-      return false;
-    }
-
-    const workspacePath = join(this.workspacesPath, workspaceId);
-    const statePath = join(workspacePath, 'state.json');
-
-    try {
-      workspace.updatedAt = new Date().toISOString();
-      workspace.status = 'saved';
-      writeFileSync(statePath, JSON.stringify(workspace, null, 2), 'utf-8');
-      console.log(`✓ Workspace 已保存: ${workspaceId}`);
-      return true;
-    } catch (error) {
-      console.error(`❌ Workspace 保存失败: ${workspaceId} - ${error.message}`);
-      return false;
-    }
-  }
-
-  /**
-   * 保存所有已加载的 Workspace
-   * @returns {Promise<object>} 保存结果
-   */
-  async saveAll() {
-    const results = { saved: [], failed: [] };
-
-    for (const [workspaceId] of this._workspaces) {
-      const ok = await this.saveWorkspace(workspaceId);
-      if (ok) {
-        results.saved.push(workspaceId);
-      } else {
-        results.failed.push(workspaceId);
-      }
-    }
-
-    console.log(`\n💾 保存完成: ${results.saved.length} 成功, ${results.failed.length} 失败`);
-    return results;
-  }
-
-  /**
-   * 删除 Workspace（从磁盘删除）
-   * @param {string} workspaceId - Workspace ID
-   * @param {boolean} [force=false] - 是否强制删除（即使在内存中）
-   * @returns {Promise<boolean>}
-   */
-  async deleteWorkspace(workspaceId, force = false) {
-    // 如果在内存中，先卸载
-    if (this._workspaces.has(workspaceId)) {
-      if (!force) {
-        console.warn(`⚠️ Workspace 在内存中，请先 unloadWorkspace 或使用 force`);
-        return false;
-      }
-      this._workspaces.delete(workspaceId);
-    }
-
-    const workspacePath = join(this.workspacesPath, workspaceId);
-
-    try {
-      if (existsSync(workspacePath)) {
-        rmSync(workspacePath, { recursive: true, force: true });
-      }
-
-      this.meta.workspaceCount--;
-      await this._saveMeta();
-
-      console.log(`✓ Workspace 已删除: ${workspaceId}`);
-      return true;
-    } catch (error) {
-      console.error(`❌ Workspace 删除失败: ${error.message}`);
-      return false;
-    }
-  }
-
-  /**
-   * 获取 Workspace 状态
-   * @param {string} workspaceId - Workspace ID
-   * @returns {object|null}
+   * 获取 Workspace 实例（已在内存中）
+   * @param {string} workspaceId
+   * @returns {import('./Workspace.js').Workspace|null}
    */
   getWorkspace(workspaceId) {
     return this._workspaces.get(workspaceId) || null;
   }
 
   /**
-   * 获取所有已加载的 Workspace
-   * @returns {Array<object>}
+   * 创建 Workspace
+   *
+   * @param {object} options
+   * @param {string}  options.id          - Workspace ID（必填，全局唯一）
+   * @param {string}  options.path        - 物理路径（必填，用户指定）
+   * @param {string}  [options.name]     - 显示名称
+   * @param {string}  [options.description]
+   * @param {string}  [options.configPath] - Workspace 专属配置文件路径
+   * @returns {Promise<Workspace>} 创建的 Workspace 实例
    */
-  getAllWorkspaces() {
-    return Array.from(this._workspaces.values());
+  async createWorkspace(options) {
+    const { id, path, name, description = '', configPath = null } = options;
+
+    if (!id) throw new Error('workspace id 是必填项');
+    if (!path) throw new Error('workspace path 是必填项（用户必须指定物理路径）');
+
+    // 检查是否已存在
+    if (this._workspaces.has(id)) {
+      throw new Error(`Workspace 已加载: ${id}`);
+    }
+    const registry = this._loadRegistry();
+    if (registry.workspaces?.[id]) {
+      throw new Error(`Workspace 已注册: ${id}`);
+    }
+
+    // 解析路径
+    const absolutePath = isAbsolute(path) ? path : resolve(this.projectRoot, path);
+
+    console.log(`\n📦 创建 Workspace: ${id}`);
+    console.log(`   路径: ${absolutePath}`);
+
+    // 确保目录存在
+    if (!existsSync(absolutePath)) {
+      mkdirSync(absolutePath, { recursive: true });
+    }
+
+    // 创建 .workspace/sessions/ 目录
+    const sessionsDir = join(absolutePath, '.workspace', 'sessions');
+    if (!existsSync(sessionsDir)) {
+      mkdirSync(sessionsDir, { recursive: true });
+    }
+
+    // 更新注册表
+    registry.workspaces[id] = {
+      id,
+      name: name || id,
+      description,
+      path: absolutePath,
+      configPath: configPath || null,
+      createdAt: new Date().toISOString(),
+    };
+    this._saveRegistry(registry);
+
+    // 实例化 Workspace
+    const WorkSpace = (await import('./Workspace.js')).WorkSpace;
+    const workspace = new WorkSpace({
+      id,
+      name: name || id,
+      path: absolutePath,
+      configPath: configPath || null,
+      config: this.config,
+    });
+
+    this._workspaces.set(id, workspace);
+    this._meta.loadedCount++;
+    this._meta.totalCount = Object.keys(registry.workspaces).length;
+
+    console.log(`✓ Workspace 创建成功: ${id}`);
+
+    return workspace;
   }
 
   /**
-   * 列出 Zone 中的所有 Workspace（从磁盘读取）
-   * @returns {Array<object>} Workspace 概要列表
+   * 加载 Workspace（懒加载：实例化并初始化）
+   * @param {string} workspaceId
+   * @returns {Promise<Workspace>} Workspace 实例
    */
-  listWorkspaces() {
-    if (!existsSync(this.workspacesPath)) {
-      return [];
+  async loadWorkspace(workspaceId) {
+    // 已在内存中
+    if (this._workspaces.has(workspaceId)) {
+      return this._workspaces.get(workspaceId);
     }
 
-    try {
-      const entries = readdirSync(this.workspacesPath);
-      return entries
-        .filter(entry => {
-          const statePath = join(this.workspacesPath, entry, 'state.json');
-          return existsSync(statePath);
-        })
-        .map(workspaceId => {
-          const statePath = join(this.workspacesPath, workspaceId, 'state.json');
-          try {
-            const data = readFileSync(statePath, 'utf-8');
-            const state = JSON.parse(data);
-            return {
-              id: state.id,
-              name: state.name,
-              description: state.description,
-              status: this._workspaces.has(state.id) ? this._workspaces.get(state.id).status : 'unloaded',
-              createdAt: state.createdAt,
-              updatedAt: state.updatedAt,
-            };
-          } catch {
-            return { id: workspaceId, name: workspaceId, status: 'error' };
-          }
-        });
-    } catch {
-      return [];
+    // 读取注册表
+    const registry = this._loadRegistry();
+    const meta = registry.workspaces?.[workspaceId];
+
+    if (!meta) {
+      throw new Error(`Workspace 未注册: ${workspaceId}`);
     }
+
+    const absolutePath = meta.path;
+
+    // 检查物理路径是否存在
+    if (!existsSync(absolutePath)) {
+      throw new Error(`Workspace 物理路径不存在: ${absolutePath}`);
+    }
+
+    console.log(`\n📂 加载 Workspace: ${workspaceId}`);
+    console.log(`   路径: ${absolutePath}`);
+
+    // 实例化
+    const WorkSpace = (await import('./Workspace.js')).WorkSpace;
+    const workspace = new WorkSpace({
+      id: workspaceId,
+      name: meta.name || workspaceId,
+      path: absolutePath,
+      configPath: meta.configPath || null,
+      config: this.config,
+    });
+
+    // 初始化（自建 Manager + 恢复 Session）
+    await workspace.initialize();
+
+    this._workspaces.set(workspaceId, workspace);
+    this._meta.loadedCount++;
+
+    console.log(`✓ Workspace 加载成功: ${workspaceId}`);
+
+    return workspace;
   }
 
-  // ═══════════════════════════════════════════
-  //  内部方法
-  // ═══════════════════════════════════════════
+  /**
+   * 关闭 Workspace（从内存卸载，不删除文件）
+   * @param {string} workspaceId
+   * @returns {Promise<void>}
+   */
+  async closeWorkspace(workspaceId) {
+    const workspace = this._workspaces.get(workspaceId);
+    if (!workspace) {
+      console.warn(`⚠️ Workspace 未加载: ${workspaceId}`);
+      return;
+    }
+
+    // 保存状态
+    await workspace.save();
+
+    this._workspaces.delete(workspaceId);
+    this._meta.loadedCount--;
+
+    console.log(`✓ Workspace 已关闭: ${workspaceId}`);
+  }
 
   /**
-   * 确保目录结构存在
-   * @private
+   * 删除 Workspace（从注册表移除，不删除物理文件）
+   * @param {string} workspaceId
+   * @param {boolean} [force=false] - 是否强制删除（即使在内存中）
+   * @returns {Promise<void>}
    */
-  _ensureDirectories() {
-    const dirs = [
-      this.zonesRoot,
-      this.zonePath,
-      this.workspacesPath,
-      join(this.zonePath, 'cache'),
-    ];
-
-    for (const dir of dirs) {
-      if (!existsSync(dir)) {
-        mkdirSync(dir, { recursive: true });
-        console.log(`✓ 创建目录: ${dir}`);
+  async deleteWorkspace(workspaceId, force = false) {
+    // 从内存移除
+    if (this._workspaces.has(workspaceId)) {
+      if (!force) {
+        throw new Error(`Workspace 在内存中，请先 closeWorkspace 或使用 force`);
       }
+      await this.closeWorkspace(workspaceId);
     }
-  }
 
-  /**
-   * 加载 Zone 元信息
-   * @private
-   */
-  async _loadMeta() {
-    const metaPath = join(this.zonePath, 'meta.json');
-
-    if (existsSync(metaPath)) {
-      try {
-        const data = readFileSync(metaPath, 'utf-8');
-        this.meta = { ...this.meta, ...JSON.parse(data) };
-      } catch (error) {
-        console.warn(`⚠️ 元信息加载失败: ${error.message}`);
-      }
-    } else {
-      this.meta.createdAt = new Date().toISOString();
-      await this._saveMeta();
+    // 从注册表移除
+    const registry = this._loadRegistry();
+    if (!registry.workspaces?.[workspaceId]) {
+      throw new Error(`Workspace 未注册: ${workspaceId}`);
     }
+
+    delete registry.workspaces[workspaceId];
+    this._saveRegistry(registry);
+
+    this._meta.totalCount--;
+
+    console.log(`✓ Workspace 已删除: ${workspaceId}`);
   }
-
-  /**
-   * 保存 Zone 元信息
-   * @private
-   */
-  async _saveMeta() {
-    this.meta.updatedAt = new Date().toISOString();
-    this.meta.workspaceCount = this._workspaces.size;
-
-    const metaPath = join(this.zonePath, 'meta.json');
-    try {
-      writeFileSync(metaPath, JSON.stringify(this.meta, null, 2), 'utf-8');
-    } catch (error) {
-      console.error(`❌ 元信息保存失败: ${error.message}`);
-    }
-  }
-
-  /**
-   * 加载 workspace 列表
-   * @private
-   */
-  async _loadWorkspaceList() {
-    const workspaces = this.listWorkspaces();
-    this.meta.workspaceCount = workspaces.length;
-    await this._saveMeta();
-  }
-
-  /**
-   * 解析路径
-   * @private
-   */
-  _resolvePath(relativePath) {
-    if (isAbsolute(relativePath)) {
-      return relativePath;
-    }
-    return join(this.projectRoot, relativePath);
-  }
-
-  /**
-   * 生成唯一 ID
-   * @private
-   */
-  _generateId() {
-    const timestamp = Date.now().toString(36);
-    const random = Math.random().toString(36).substring(2, 6);
-    return `${timestamp}-${random}`;
-  }
-
-  // ═══════════════════════════════════════════
-  //  信息方法
-  // ═══════════════════════════════════════════
 
   /**
    * 获取 Zone 信息
@@ -513,231 +338,45 @@ export class Zone {
    */
   getInfo() {
     return {
-      id: this.zoneId,
+      id: this.id,
       name: this.name,
-      path: this.zonePath,
-      workspacesPath: this.workspacesPath,
-      loadedCount: this._workspaces.size,
-      totalCount: this.meta.workspaceCount,
-      createdAt: this.meta.createdAt,
-      updatedAt: this.meta.updatedAt,
+      projectRoot: this.projectRoot,
+      loadedCount: this._meta.loadedCount,
+      totalCount: this._meta.totalCount,
+      workspaces: this.listWorkspaces(),
     };
   }
-
-  /**
-   * 打印 Zone 状态
-   */
-  printStatus() {
-    console.log(`\n🌐 Zone: ${this.name}`);
-    console.log(`   ID: ${this.zoneId}`);
-    console.log(`   路径: ${this.zonePath}`);
-    console.log(`   Workspace: ${this._workspaces.size}/${this.meta.workspaceCount} (已加载/总计)`);
-
-    const workspaces = this.listWorkspaces();
-    if (workspaces.length > 0) {
-      console.log(`\n   Workspace 列表:`);
-      for (const ws of workspaces) {
-        const loaded = this._workspaces.has(ws.id);
-        const statusIcon = loaded ? '●' : '○';
-        console.log(`     ${statusIcon} ${ws.id} - ${ws.name} [${ws.status}]`);
-      }
-    }
-  }
 }
 
 // ═══════════════════════════════════════════
-//  ZoneManager —— 多 Zone 管理
+//  向后兼容：保留 ZoneManager 相关导出
 // ═══════════════════════════════════════════
-
-const _zones = new Map();
 
 /**
- * ZoneManager - 多 Zone 管理器
- *
- * 功能：
- * 1. 创建/获取 Zone
- * 2. 列出所有 Zone
- * 3. 删除 Zone
+ * @deprecated 使用 getZone() 替代
  */
 export class ZoneManager {
-  /**
-   * @param {object} options
-   * @param {string}  [options.zonesRoot]   - Zones 根目录
-   * @param {string}  [options.projectRoot] - 项目根目录
-   */
-  constructor(options = {}) {
-    this.projectRoot = options.projectRoot || resolve(__dirname, '..');
-    this.zonesRoot = options.zonesRoot
-      ? this._resolvePath(options.zonesRoot)
-      : join(this.projectRoot, DEFAULT_ZONES_PATH);
-
-    // 确保根目录存在
-    if (!existsSync(this.zonesRoot)) {
-      mkdirSync(this.zonesRoot, { recursive: true });
-    }
+  constructor() {
+    console.warn('[ZoneManager] 已弃用，请使用 getZone() 单例');
   }
 
-  /**
-   * 创建 Zone
-   * @param {object} options
-   * @param {string}  [options.zoneId] - Zone ID（可选，自动生成）
-   * @param {string}  [options.name]   - Zone 名称
-   * @returns {Promise<Zone>}
-   */
-  async createZone(options = {}) {
-    const zoneId = options.zoneId || this._generateId();
-    const zone = new Zone({
-      zoneId,
-      name: options.name || `Zone-${zoneId}`,
-      zonesRoot: this.zonesRoot,
-      projectRoot: this.projectRoot,
-    });
-
-    await zone.initialize();
-    _zones.set(zoneId, zone);
-
-    console.log(`✓ Zone 创建成功: ${zoneId}`);
-    return zone;
+  async createZone() {
+    return getZone();
   }
 
-  /**
-   * 获取 Zone（已存在则返回，否则创建）
-   * @param {string} zoneId - Zone ID
-   * @returns {Promise<Zone|null>}
-   */
-  async getZone(zoneId) {
-    if (_zones.has(zoneId)) {
-      return _zones.get(zoneId);
-    }
-
-    // 尝试从磁盘加载
-    const zonePath = join(this.zonesRoot, zoneId);
-    if (!existsSync(zonePath)) {
-      return null;
-    }
-
-    const zone = new Zone({
-      zoneId,
-      zonesRoot: this.zonesRoot,
-      projectRoot: this.projectRoot,
-    });
-
-    await zone.initialize();
-    _zones.set(zoneId, zone);
-
-    return zone;
+  async getZone(id) {
+    return getZone();
   }
 
-  /**
-   * 获取默认 Zone（名为 'default' 的 Zone）
-   * @returns {Promise<Zone>}
-   */
   async getDefaultZone() {
-    let zone = await this.getZone('default');
-    if (!zone) {
-      zone = await this.createZone({ zoneId: 'default', name: '默认Zone' });
-    }
-    return zone;
+    return getZone();
   }
 
-  /**
-   * 删除 Zone
-   * @param {string} zoneId - Zone ID
-   * @returns {Promise<boolean>}
-   */
-  async deleteZone(zoneId) {
-    const zone = _zones.get(zoneId);
-    if (zone) {
-      const ok = await zone.destroy(true);
-      if (ok) {
-        _zones.delete(zoneId);
-      }
-      return ok;
-    }
-
-      // 从磁盘删除
-    const zonePath = join(this.zonesRoot, zoneId);
-    if (!existsSync(zonePath)) {
-      return false;
-    }
-
-    try {
-      rmSync(zonePath, { recursive: true, force: true });
-      return true;
-    } catch (error) {
-      console.error(`❌ Zone 删除失败: ${error.message}`);
-      return false;
-    }
-  }
-
-  /**
-   * 列出所有 Zone
-   * @returns {Array<object>}
-   */
   listZones() {
-    try {
-      const entries = readdirSync(this.zonesRoot);
-      return entries
-        .filter(entry => {
-          const metaPath = join(this.zonesRoot, entry, 'meta.json');
-          return existsSync(metaPath);
-        })
-        .map(zoneId => {
-          const metaPath = join(this.zonesRoot, zoneId, 'meta.json');
-          try {
-            const data = readFileSync(metaPath, 'utf-8');
-            const meta = JSON.parse(data);
-            const isLoaded = _zones.has(zoneId);
-            return {
-              id: meta.id,
-              name: meta.name,
-              workspaceCount: meta.workspaceCount,
-              isLoaded,
-              createdAt: meta.createdAt,
-              updatedAt: meta.updatedAt,
-            };
-          } catch {
-            return { id: zoneId, name: zoneId, isLoaded: false };
-          }
-        });
-    } catch {
-      return [];
-    }
-  }
-
-  /**
-   * 解析路径
-   * @private
-   */
-  _resolvePath(relativePath) {
-    if (isAbsolute(relativePath)) {
-      return relativePath;
-    }
-    return join(this.projectRoot, relativePath);
-  }
-
-  /**
-   * 生成唯一 ID
-   * @private
-   */
-  _generateId() {
-    const timestamp = Date.now().toString(36);
-    const random = Math.random().toString(36).substring(2, 6);
-    return `${timestamp}-${random}`;
+    return [{ id: getZone().id, name: getZone().name, workspaceCount: getZone()._meta.totalCount }];
   }
 }
 
-// 导出单例
-let _manager = null;
-
-export function getZoneManager(options = {}) {
-  if (!_manager) {
-    _manager = new ZoneManager(options);
-  }
-  return _manager;
-}
-
-export function resetZoneManager() {
-  _manager = null;
-  _zones.clear();
+export function getZoneManager() {
+  return new ZoneManager();
 }

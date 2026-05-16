@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────
-//  ContextManager —— 上下文自动清理机制
+//  ContextOptimizer —— 上下文自动裁剪与优化器
 // ─────────────────────────────────────────────
 import { chat } from './Llm.js';
 
@@ -12,7 +12,7 @@ import { chat } from './Llm.js';
  * 3. 旧消息压缩为摘要（summarize）
  * 4. 超过阈值触发自动裁剪（prune）
  */
-export class ContextManager {
+export class ContextOptimizer {
   /**
    * @param {object} options
    * @param {number}  [options.maxTokens=6000]      - 最大保留token数（估算）
@@ -95,7 +95,7 @@ export class ContextManager {
     // 如果系统消息太多，也需要裁剪
     const systemTokens = this.estimateTokens(systemMessages);
     if (systemTokens > this.maxTokens * 0.3) {
-      console.warn(`[ContextManager] ⚠️ 系统提示过长 (${systemTokens} tokens)，建议优化`);
+      console.warn(`[ContextOptimizer] ⚠️ 系统提示过长 (${systemTokens} tokens)，建议优化`);
     }
 
     // 保留最近N轮完整对话
@@ -119,7 +119,7 @@ export class ContextManager {
    * @private
    */
   _simplePrune(systemMessages, oldMessages, recentMessages) {
-    console.log(`[ContextManager] ✂️ 简单裁剪 ${oldMessages.length} 条旧消息...`);
+    console.log(`[ContextOptimizer] ✂️ 简单裁剪 ${oldMessages.length} 条旧消息...`);
 
     // 统计被裁剪的信息
     const removedTokens = this.estimateTokens(oldMessages);
@@ -134,7 +134,7 @@ export class ContextManager {
    * @private
    */
   async _compressWithSummary(systemMessages, oldMessages, recentMessages) {
-    console.log(`[ContextManager] 📝 压缩 ${oldMessages.length} 条旧消息为摘要...`);
+    console.log(`[ContextOptimizer] 📝 压缩 ${oldMessages.length} 条旧消息为摘要...`);
 
     try {
       // 构建摘要提示
@@ -171,7 +171,7 @@ ${this._formatMessagesForSummary(oldMessages)}
       this.stats.savedTokens += (oldTokens - newTokens);
       this.stats.totalSummaries++;
 
-      console.log(`[ContextManager] ✅ 摘要生成成功，节省约 ${Math.round(oldTokens - newTokens)} tokens`);
+      console.log(`[ContextOptimizer] ✅ 摘要生成成功，节省约 ${Math.round(oldTokens - newTokens)} tokens`);
 
       // 返回压缩后的消息
       return [
@@ -183,7 +183,7 @@ ${this._formatMessagesForSummary(oldMessages)}
         ...recentMessages,
       ];
     } catch (error) {
-      console.error(`[ContextManager] ❌ 摘要生成失败: ${error.message}`);
+      console.error(`[ContextOptimizer] ❌ 摘要生成失败: ${error.message}`);
       // 摘要失败时，使用简单裁剪
       this.stats.totalPrunes++;
       return [...systemMessages, ...recentMessages];
@@ -258,13 +258,13 @@ ${this._formatMessagesForSummary(oldMessages)}
   logStatus(messages) {
     const tokens = this.estimateTokens(messages);
     const status = tokens > this.maxTokens ? '⚠️ 需要裁剪' : '✅ 正常';
-    console.log(`[ContextManager] 📊 状态: ${status} | Token: ${tokens}/${this.maxTokens} | 消息: ${messages.length}`);
+    console.log(`[ContextOptimizer] 📊 状态: ${status} | Token: ${tokens}/${this.maxTokens} | 消息: ${messages.length}`);
   }
 }
 
 /**
- * 便捷函数：创建默认配置的ContextManager
+ * 便捷函数：创建默认配置的 ContextOptimizer
  */
-export function createContextManager(options = {}) {
-  return new ContextManager(options);
+export function createContextOptimizer(options = {}) {
+  return new ContextOptimizer(options);
 }

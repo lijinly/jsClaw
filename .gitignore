@@ -1,27 +1,7 @@
-# 依赖
 node_modules/
-
-# 环境变量（含 API Key，绝对不能提交）
 .env
-
-# 系统 & 编辑器
-.DS_Store
-Thumbs.db
-.vscode/
-.idea/
-
-# 日志
-*.log
-npm-debug.log*
-
-# 系统配置（本地自定义，不提交到 git）
-config/
-workspaces/
-data/
 logs/
+data/
 temp/
-
-# 示例配置文件模板（.example.json 不参与 git）
-*.example.json
-.workbuddy
-.lingma
+*.log
+.DS_Store

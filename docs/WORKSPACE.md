@@ -1,50 +1,106 @@
 # WorkSpace —— 统一工作空间
 
-> 管理多个 Member，统一任务路由，自动加载工作记忆
+> 管理多个 Member，统一任务路由，自动加载工作记忆，Session 持久化
 
 ## 架构设计
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                      WorkSpace 架构                             │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│   ┌─────────────────────────────────────────────────────────┐  │
-│   │                      WorkSpace                          │  │
-│   │                    工作空间主入口                        │  │
-│   │  ┌─────────────────────────────────────────────────┐   │  │
-│   │  │                    Member                        │   │  │
-│   │  │              Agent (with Persona)               │   │  │
-│   │  │  • identity (身份描述)                          │   │  │
-│   │  │  • soul (性格描述)                               │   │  │
-│   │  │  • skills (技能列表)                            │   │  │
-│   │  └─────────────────────────────────────────────────┘   │  │
-│   │  ┌─────────────────────────────────────────────────┐   │  │
-│   │  │                   Memory                         │   │  │
-│   │  │                  工作空间记忆                    │   │  │
-│   │  └─────────────────────────────────────────────────┘   │  │
-│   │  ┌─────────────────────────────────────────────────┐   │  │
-│   │  │                  Manager                         │   │  │
-│   │  │                    协调器                       │   │  │
-│   │  └─────────────────────────────────────────────────┘   │  │
-│   └─────────────────────────────────────────────────────────┘  │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│                           Zone (单例)                                │
+│                    持有 Workspace 实例池 + 注册表                       │
+│                                                                      │
+│   workspaces: Map<id, Workspace>   ← Workspace 实例（懒加载）          │
+│   registry: system.json            ← 持久化注册表                     │
+│                                                                      │
+│   ┌────────────────────────────────────────────────────────────────┐ │
+│   │                      Workspace                                  │ │
+│   │  path: 物理路径（用户指定）                                      │ │
+│   │  manager: 自建 Manager                                         │ │
+│   │  sessions: Map<sessionId, Session>   ← 带文件持久化              │ │
+│   │                                                                  │ │
+│   │  ├── Manager                                                   │ │
+│   │  │   └── Member[]                                             │ │
+│   │  │       └── Agent (Think-Act)                                │ │
+│   │  │           • identity / soul / skills                        │ │
+│   │  │                                                            │ │
+│   │  └── Memory (WorkspaceMemory)                                  │ │
+│   └────────────────────────────────────────────────────────────────┘ │
+└──────────────────────────────────────────────────────────────────────┘
 ```
 
-## WorkSpace 类
+### Session 持久化结构
+
+```
+<workspace-path>/
+└── .workspace/
+    └── sessions/
+        └── ws-{workspaceId}-s-{sessionId}.json   ← Session 数据
+```
+
+### 配置结构
+
+```
+config/
+├── system.json                ← Zone 注册表（workspace id → path）
+└── workspaces/
+    └── <id>.json            ← Workspace 专属配置（members 等）
+
+data/                         ← 仅作默认数据目录，不存放 workspace
+```
+
+## Zone —— Workspace 实例管理器
+
+Zone 是全局单例，负责 Workspace 的注册、加载和实例化。
+
+### Zone API
+
+```javascript
+import { getZone } from './Zone.js';
+
+// 初始化 Zone（扫描 system.json）
+await zone.initialize();
+
+// 列出所有 Workspace（仅配置，不实例化）
+zone.listWorkspaces();
+// [{ id, name, path, createdAt }]
+
+// 创建 Workspace（必须指定物理路径）
+await zone.createWorkspace({
+  id: 'proj-a',
+  name: '项目A',
+  path: 'D:/projects/proj-a',   // 用户指定路径
+});
+
+// 加载 Workspace（懒加载，返回实例）
+const ws = await zone.loadWorkspace('proj-a');
+
+// 获取已加载的 Workspace 实例
+const ws = zone.getWorkspace('proj-a');
+
+// 关闭 Workspace（从内存卸载）
+await zone.closeWorkspace('proj-a');
+
+// 删除 Workspace（从注册表移除）
+await zone.deleteWorkspace('proj-a');
+
+// 获取 Zone 信息
+zone.getInfo();
+// { zoneId, workspaceCount, loadedCount }
+```
+
+## Workspace —— 工作空间
+
+每个 Workspace 关联一个物理路径，拥有自己的 Manager 和 Session 列表。
 
 ### 构造函数
 
 ```javascript
-import { WorkSpace } from './WorkSpace.js';
-
-const workspace = new WorkSpace({
-  id: 'default',                    // WorkSpace ID
-  name: '默认工作空间',               // 名称
-  description: '主要工作区域',        // 描述
-  configPath: './config/default.json', // 配置文件路径
-  systemConfig: systemConfig,         // 系统配置实例
+const ws = new WorkSpace({
+  id: 'proj-a',
+  name: '项目A',
+  path: 'D:/projects/proj-a',    // 物理路径（必填）
+  config: { ... },               // Workspace 专属配置
+  systemConfig: configInstance,   // 系统配置实例
 });
 ```
 
@@ -52,10 +108,32 @@ const workspace = new WorkSpace({
 
 ```javascript
 await workspace.initialize();
-// 自动加载：
-// 1. Config 配置
-// 2. Members 成员
-// 3. WorkspaceMemory 记忆
+// 自动：
+// 1. 确保物理路径存在
+// 2. 创建 .workspace/sessions/ 目录
+// 3. 自建 Manager（加载 members 配置）
+// 4. 从 .workspace/sessions/ 恢复 Session 列表
+```
+
+### Session 管理
+
+```javascript
+// 开始新会话（关联到指定 Member）
+const session = await workspace.startSession({ memberId: 'coder' });
+// session.id = 'ws-proj-a-s-0f3a9b'
+
+// 获取 Session
+const session = workspace.getSession('ws-proj-a-s-0f3a9b');
+
+// 列出所有 Session
+workspace.listSessions();
+// [{ id, title, memberId, createdAt, updatedAt }]
+
+// 关闭 Session（从内存移除，不删文件）
+await workspace.closeSession('ws-proj-a-s-0f3a9b');
+
+// 通过 Session 发送消息
+const result = await session.userMessage('帮我写一个函数');
 ```
 
 ### Member 管理
@@ -73,27 +151,20 @@ const member = await workspace.addMember({
 // 获取 Member
 const member = workspace.getMember('coder');
 
-// 获取所有 Members
-const allMembers = workspace.getAllMembers();
-
 // 获取默认 Member
 const defaultMember = workspace.getDefaultMember();
 
-// 移除 Member（不能移除 default）
-workspace.removeMember('coder');
-
-// 列出所有 Members
-workspace.listMembers();
+// 获取所有 Members
+const allMembers = workspace.getAllMembers();
 
 // 获取 Member 概要
 const summaries = workspace.getMemberSummaries();
-// [{ id, name, identity, skills }]
 ```
 
 ### 任务执行
 
 ```javascript
-// 默认 Member 执行
+// 默认 Manager 执行
 const result = await workspace.submitTask('帮我搜索新闻');
 
 // 指定 Member 执行
@@ -105,8 +176,11 @@ const result = await workspace.submitTask({
 // 多 Member 协作
 const result = await workspace.submitTask({
   description: '完成项目',
-  memberIds: ['coder', 'tester'],
+  memberIds: ['coder', 'researcher'],
 });
+
+// 通过 Session 执行（带上下文）
+const result = await workspace.getSession(sessionId).userMessage('继续分析');
 ```
 
 ### 返回结果格式
@@ -118,23 +192,16 @@ const result = await workspace.submitTask({
   executor: 'Member',
   executorName: '开发者',
   memberId: 'coder',
-  result: {
-    thinking: '...',
-    actions: [...],
-    result: '...',
-  },
+  result: { thinking: '...', actions: [...], result: '...' },
 }
 
 // 多 Member 协作
 {
   success: true,
   executor: 'Members',
-  membersUsed: ['coder', 'tester'],
+  membersUsed: ['coder', 'researcher'],
   result: '综合结果...',
-  detailedResults: [
-    { memberId: 'coder', result: {...} },
-    { memberId: 'tester', result: {...} },
-  ],
+  detailedResults: [...],
 }
 
 // Member 不存在
@@ -145,324 +212,131 @@ const result = await workspace.submitTask({
 }
 ```
 
-### 工作空间记忆
+## Session —— 会话
+
+Session 归属于 Workspace，负责用户 ↔ Member 的对话管理，带文件持久化。
+
+### Session 生命周期
+
+```
+workspace.startSession({ memberId })
+    ↓
+[内存] sessions Map<id, Session>
+    ↓ (自动 + 定期)
+持久化到 <path>/.workspace/sessions/<id>.json
+    ↓
+workspace.closeSession(id)
+    ↓
+从内存移除（文件保留，下次 loadWorkspace 时重新加载）
+```
+
+### Session API
 
 ```javascript
-// 获取记忆实例
-const memory = workspace.getMemory();
+// 发送消息（带上下文）
+const result = await session.userMessage('你好');
 
-// 获取用于 system prompt 的记忆
-const promptContent = workspace.getMemoryForPrompt();
+// 获取摘要
+const summary = session.getSummary();
+// { id, title, memberId, messageCount, createdAt, updatedAt }
 
-// 保存内容为记忆
-workspace.saveMemory('项目配置信息', {
-  filename: 'project-config',
-  category: 'config',
-});
+// 获取聊天历史
+const history = session.getChatHistory();
+// [{ role: 'user'|'assistant', content: '...' }]
 
-// 执行任务时自动注入记忆
-const result = await member.execute('分析项目', {
-  workspaceMemory: workspace.getMemoryForPrompt(),
-});
+// 重命名会话
+session.setTitle('新标题');
+
+// 获取/设置当前 Member
+const member = session.getMember();
+session.switchMember('coder');
+
+// 手动保存（通常自动）
+await session.save();
 ```
 
-### 信息查询
-
-```javascript
-// 获取 WorkSpace 信息
-const info = workspace.getInfo();
-// {
-//   id: 'default',
-//   name: '默认工作空间',
-//   description: '...',
-//   memberCount: 3,
-//   members: [...],
-//   defaultMember: {...},
-//   memory: { count: 5, dir: '...' },
-// }
-```
-
-## Member 类
-
-Member 继承自 Agent，拥有 Think-Act 能力，同时具备人格配置。
-
-### 构造函数
-
-```javascript
-import { Member } from './Member.js';
-
-const member = new Member('coder', {
-  name: '开发者',                // 显示名称
-  identity: '专业软件开发者...',  // 身份描述
-  soul: '逻辑严谨，注重效率...',  // 性格描述
-  skills: ['read', 'write', 'exec'], // 技能列表
-  maxRounds: 10,                 // 最大执行轮次
-  verbose: false,                // 详细日志
-});
-```
-
-### 构建 System Prompt
-
-```javascript
-// 完整 prompt（含人格 + 记忆）
-const prompt = member.buildSystemPrompt(workspaceMemory);
-// 输出格式：
-// # 身份定义
-// <identity>
-//
-// # 性格特征
-// <soul>
-//
-// # 角色定位
-// 你是 <name>。
-//
-// # 可用技能
-// 你拥有以下技能：<skills>
-//
-// # 工作空间记忆
-// <memory content>
-```
-
-### 执行任务
-
-```javascript
-// 基础执行
-const result = await member.execute('分析代码', {
-  verbose: true,               // 打印详细日志
-  history: [],                  // 对话历史
-  usePersona: true,            // 使用人格配置
-  workspaceMemory: '...',       // 工作空间记忆
-});
-
-// 带 guidance 执行
-const result = await member.execute('审查代码', {
-  guidance: {
-    keyRequirements: '发现潜在bug',
-    suggestedTools: ['read', 'exec'],
-    executionSteps: '1. 读取代码 2. 分析逻辑',
-  },
-});
-```
-
-### 技能管理
-
-```javascript
-// 获取技能列表
-const skills = member.getSkillNames();
-// ['read', 'write', 'exec', 'web_search', ...]
-
-// 检查是否有某技能
-const hasIt = member.hasSkill('web_search');
-
-// 获取基础技能（系统内置）
-const baseSkills = member.baseSkills;
-
-// 获取所有技能（基础 + 角色）
-const allSkills = member.allSkills;
-```
-
-### 信息查询
-
-```javascript
-// 获取详细信息
-const info = member.getInfo();
-// {
-//   id: 'coder',
-//   name: '开发者',
-//   role: '专业软件开发者',
-//   skillCount: 5,
-//   skills: [...],
-//   taskCount: 10,
-//   isActive: false,
-// }
-
-// 获取概要
-const summary = member.getSummary();
-// { id, name, role, skillCount }
-```
-
-## Config 系统配置
-
-### 配置文件结构
-
-```
-config/
-├── system.json           ← 系统配置
-└── workspaces/
-    └── default.json      ← workspace 配置（含 members）
-```
-
-### system.json
+## system.json —— Zone 注册表
 
 ```json
 {
-  "version": "1.0.0",
-  "paths": {
-    "workspaces": "config/workspaces/",
-    "data": "data/",
-    "logs": "logs/"
+  "version": "2.0.0",
+  "zone": {
+    "id": "default",
+    "name": "默认Zone"
   },
   "workspaces": {
-    "default": {
-      "id": "default",
-      "name": "默认工作空间",
-      "description": "系统启动时自动创建",
-      "configPath": "config/workspaces/default.json"
+    "proj-a": {
+      "id": "proj-a",
+      "name": "项目A",
+      "path": "D:/projects/proj-a",
+      "configPath": "config/workspaces/proj-a.json",
+      "createdAt": "2026-05-16T00:00:00.000Z"
     }
-  },
-  "system": {
-    "defaultWorkspaceId": "default",
-    "maxRounds": 10,
-    "verbose": false
   }
 }
 ```
 
-### workspace 配置 (default.json)
+## Workspace 专属配置 (config/workspaces/<id>.json)
 
 ```json
 {
-  "path": "data/workspaces/default",
+  "id": "proj-a",
   "members": [
-    {
-      "id": "default",
-      "name": "管理者",
-      "identity": "工作空间管理者和执行者",
-      "soul": "高效、专业、可靠",
-      "skills": []
-    },
     {
       "id": "coder",
       "name": "开发者",
-      "identity": "专业软件开发者，擅长代码编写和调试",
-      "soul": "逻辑严谨，注重代码质量",
-      "skills": ["read", "write", "edit", "exec"]
-    },
-    {
-      "id": "researcher",
-      "name": "研究员",
-      "identity": "专业研究员，擅长信息收集和分析",
-      "soul": "求知欲强，注重事实",
-      "skills": ["web_search", "web_fetch"]
+      "identity": "专业软件开发者",
+      "soul": "逻辑严谨",
+      "skills": ["read", "write", "exec"]
     }
   ]
 }
 ```
 
-### Config API
+## Config 系统配置
 
 ```javascript
-import { Config, getConfig } from './Config.js';
+import { getConfig } from './Config.js';
 
-// 获取单例
 const config = getConfig();
 
-// 获取 workspace 配置
-const workspace = config.getWorkspace('default');
+// 获取 Workspace 配置（不含实例）
+const wsConfig = config.getWorkspace('proj-a');
+// { id, name, path, configPath }
 
-// 获取 workspace 的 members
-const members = config.getWorkspaceMembers('default');
+// 获取 Workspace members
+const members = config.getWorkspaceMembers('proj-a');
 
-// 获取 workspace 的记忆目录
-const memoryPath = config.getWorkspaceMemoryPath('default');
+// 获取 Workspace 数据目录（物理路径）
+const dataPath = config.getWorkspaceDataPath('proj-a');
+// "D:/projects/proj-a"
 
-// 获取 workspace 的数据目录
-const dataPath = config.getWorkspaceDataPath('default');
+// 获取 Workspace 记忆目录
+const memoryPath = config.getWorkspaceMemoryPath('proj-a');
+// "D:/projects/proj-a/.memory"
 
-// 列出所有 workspaces
+// 列出所有 Workspace 概要
 const list = config.listWorkspaces();
-
-// 获取系统配置
-const sysConfig = config.getConfig();
-```
-
-## Zone —— Workspace 生命周期管理
-
-Zone 负责 Workspace 的创建、加载、保存和销毁。
-
-### 目录结构
-
-```
-data/zones/<zoneId>/
-├── meta.json          ← Zone 元信息
-├── workspaces/
-│   ├── <workspaceId>/
-│   │   ├── state.json  ← Workspace 运行时状态
-│   │   ├── config.json ← Workspace 配置
-│   │   └── .memory/   ← Workspace 记忆
-│   └── ...
-└── cache/             ← Zone 缓存
-```
-
-### Zone API
-
-```javascript
-import { Zone, ZoneManager, getZoneManager } from './Zone.js';
-
-// 使用 ZoneManager
-const zm = getZoneManager();
-
-// 创建 Zone
-const zone = await zm.createZone({ zoneId: 'dev', name: '开发Zone' });
-
-// 获取 Zone
-const zone = await zm.getZone('dev');
-
-// 获取默认 Zone
-const defaultZone = await zm.getDefaultZone();
-
-// 创建 Workspace
-await zone.createWorkspace({
-  workspaceId: 'project1',
-  name: '项目1',
-  description: '新项目',
-  members: [...],
-});
-
-// 加载 Workspace
-const ws = await zone.loadWorkspace('project1');
-
-// 保存 Workspace
-await zone.saveWorkspace('project1');
-
-// 卸载 Workspace
-await zone.unloadWorkspace('project1');
-
-// 删除 Workspace
-await zone.deleteWorkspace('project1', { force: true });
-
-// 保存所有
-await zone.saveAll();
-
-// 列出所有 Zone
-const zones = zm.listZones();
-
-// 删除 Zone
-await zm.deleteZone('dev');
+// [{ id, name, description, memberCount }]
 ```
 
 ## 任务路由
 
 ```
-用户输入
+用户请求
     │
     ▼
-WorkSpace.submitTask(task)
+Zone.loadWorkspace(id) / getWorkspace(id)
     │
-    ├─── 有 memberId ───→ executeWithMember(memberId)
-    │                            │
-    │                            ▼
-    │                      member.execute(task)
+    ▼
+Workspace.submitTask(task, opts)
     │
-    ├─── 有 memberIds ──→ executeWithMembers(memberIds)
-    │                            │
-    │                            ▼
-    │                      并行/顺序执行
+    ├── opts.memberIds  → executeWithMembers()  ← WorkSpace 全局路由
     │
-    └─── 无指定 ────────→ executeWithMember('default')
-                                 │
-                                 ▼
-                          defaultMember.execute(task)
+    └── opts.memberId (single) → executeWithMember()
+        └── manager.execute(task) / member.execute(task)
+            ├── Member → 直接执行（_think + _act）
+            └── Manager → Goal 分解 + _dispatchTasks()
 ```
 
 ## 测试
